@@ -17,7 +17,6 @@ class _MainNavigatorState extends State<MainNavigator> {
   int currentIndex = 0;
   final List<Widget> screens = [
     const MapScreen(), // Главная: дашборд зарядки
-    ListScreen(),
     const HistoryScreen(),
     const ProfileScreen(), // Профиль с кнопкой выхода
   ];
@@ -32,7 +31,7 @@ class _MainNavigatorState extends State<MainNavigator> {
           style: const TextStyle(color: Colors.black),
         ),
         centerTitle: true,
-        backgroundColor: const Color.fromARGB(255, 109, 89, 241),
+        backgroundColor: Colors.blueAccent,
       ),
       body: screens[currentIndex],
       backgroundColor: const Color.fromARGB(255, 250, 250, 250),
