@@ -26,5 +26,10 @@
 	<true/>
 	<key>GOOGLE_APP_ID</key>
 	<string>1:709523715721:ios:fb3ada374d99cfb1fdf858</string>
+	<key>NSAppTransportSecurity</key>
+<dict>
+  <key>NSAllowsArbitraryLoads</key>
+  <true/>
+</dict>
 </dict>
 </plist>

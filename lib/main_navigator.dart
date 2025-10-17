@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 // import '../services/auth_service.dart';
 import ' screens/history_screen.dart';
-import ' screens/list_screen.dart';
 import ' screens/map_screen.dart';
 import ' screens/profile_screen.dart'; // Для signOut в Profile
 
@@ -38,7 +37,7 @@ class _MainNavigatorState extends State<MainNavigator> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (value) => setState(() => currentIndex = value),
-        selectedItemColor: const Color.fromARGB(255, 109, 89, 241),
+        selectedItemColor: Colors.blueAccent,
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         items: const [
