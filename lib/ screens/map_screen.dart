@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:it_charge/ocpp_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -186,7 +187,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildListScreen() {
-    // Сохранённые карточки станций из вашего предыдущего кода, адаптированные под структуру
     final List<Map<String, dynamic>> stations = [
       {
         'name': 'Кинотеатр "Октябрь" DC150',
@@ -306,414 +306,484 @@ class _MapScreenState extends State<MapScreen> {
       // Можно добавить больше станций
     ];
 
-    return Container(
-      child: ListView.builder(
-        itemCount: stations.length,
-        itemBuilder: (context, index) {
-          final station = stations[index];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
-            child: Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: InkWell(
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
+    return ListView.builder(
+      shrinkWrap: true, // <-- Фикс: Помогает в Column, предотвращает unbounded
+      physics: AlwaysScrollableScrollPhysics(), // Скролл всегда
+      itemCount: stations.length,
+      itemBuilder: (context, index) {
+        final station = stations[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
+          child: Card(
+            elevation: 1,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: InkWell(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
                     ),
-                    builder: (BuildContext context) {
-                      return FractionallySizedBox(
-                        heightFactor: 0.8,
-                        child: Column(
-                          children: [
-                            // Верхняя панель
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.arrow_back),
-                                    onPressed: () => Navigator.pop(context),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.more_vert),
-                                    onPressed: () {},
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Название и рейтинг
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      station['name'] ?? 'Неизвестно',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                  ),
+                  builder: (BuildContext context) {
+                    return StatefulBuilder(
+                      builder: (BuildContext context, StateSetter setModalState) {
+                        return FractionallySizedBox(
+                          heightFactor: 0.8,
+                          child: Column(
+                            children: [
+                              // Верхняя панель
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.arrow_back),
+                                      onPressed: () => Navigator.pop(context),
                                     ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.star,
-                                        color: Colors.yellow[700],
-                                        size: 20,
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        (station['rating'] ?? 0.0).toString(),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            // Адрес
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.location_on,
-                                    color: Colors.grey,
-                                    size: 16,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      station['address'] ?? '',
-                                      style: TextStyle(color: Colors.grey[700]),
-                                      overflow: TextOverflow.ellipsis,
+                                    IconButton(
+                                      icon: Icon(Icons.more_vert),
+                                      onPressed: () {},
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 16),
-                            // Чипы
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Wrap(
-                                spacing: 8,
-                                children: [
-                                  Chip(
-                                    label: Text(station['available'] ?? ''),
-                                    backgroundColor: Colors.green[100],
-                                  ),
-                                  Chip(
-                                    label: Text(station['distance'] ?? ''),
-                                    backgroundColor: Colors.grey[200],
-                                  ),
-                                  Chip(
-                                    label: Text(station['time'] ?? ''),
-                                    backgroundColor: Colors.grey[200],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(height: 16),
-                            // Доступные разъёмы
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Text(
-                                'Доступные разъемы',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                  ],
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount:
-                                    (station['connectors'] as List?)?.length ??
-                                    0,
-                                itemBuilder: (context, connIndex) {
-                                  final connector =
-                                      station['connectors'][connIndex];
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 8,
-                                      horizontal: 16,
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: Colors.blue[100],
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                              child: Icon(
-                                                Icons.bolt,
-                                                color: Colors.blue,
-                                              ),
-                                            ),
-                                            SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    connector['type'] ?? '',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.blue,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    connector['power'] ?? '',
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
-                                              children: [
-                                                Text(
-                                                  connector['price'] ?? '',
-                                                  style: TextStyle(
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                                SizedBox(height: 4),
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 4,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        connector['status_color'] ??
-                                                        Colors.grey,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          20,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    connector['status'] ?? '',
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
+                              // Название и рейтинг
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        station['name'] ?? 'Неизвестно',
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                        SizedBox(height: 8),
-                                        ElevatedButton(
-                                          onPressed: () {},
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.blue,
-                                            minimumSize: Size(
-                                              double.infinity,
-                                              48,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(24),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Начать зарядку',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
+                                      ),
+                                    ),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.star,
+                                          color: Colors.yellow[700],
+                                          size: 20,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          (station['rating'] ?? 0.0).toString(),
                                         ),
                                       ],
                                     ),
-                                  );
-                                },
+                                  ],
+                                ),
                               ),
-                            ),
-                            // Кнопка Построить маршрут
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: ElevatedButton(
-                                onPressed: () {},
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  minimumSize: Size(double.infinity, 48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
+                              SizedBox(height: 8),
+                              // Адрес
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on,
+                                      color: Colors.grey,
+                                      size: 16,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        station['address'] ?? '',
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 16),
+                              // Чипы
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    Chip(
+                                      label: Text(station['available'] ?? ''),
+                                      backgroundColor: Colors.green[100],
+                                    ),
+                                    Chip(
+                                      label: Text(station['distance'] ?? ''),
+                                      backgroundColor: Colors.grey[200],
+                                    ),
+                                    Chip(
+                                      label: Text(station['time'] ?? ''),
+                                      backgroundColor: Colors.grey[200],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
                                 ),
                                 child: Text(
-                                  'Построить маршрут',
-                                  style: TextStyle(color: Colors.white),
+                                  'Доступные разъёмы',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              station['name'] ?? 'Неизвестно',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              Expanded(
+                                // Только здесь для модалки
+                                child: ListView.builder(
+                                  shrinkWrap: true, // Фикс для nested ListView
+                                  physics: ClampingScrollPhysics(),
+                                  itemCount:
+                                      (station['connectors'] as List?)
+                                          ?.length ??
+                                      0,
+                                  itemBuilder: (context, connIndex) {
+                                    final connector =
+                                        station['connectors'][connIndex];
+                                    final connectorId = connIndex + 1;
+                                    final currentStatus =
+                                        connector['status'] ?? 'Доступен';
+                                    final isAvailable =
+                                        currentStatus == 'Доступен';
+                                    final chargePointId =
+                                        station['chargePointId'] ?? 'CP1';
+                                    final idTag = 'TAG123';
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                        horizontal: 16,
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue[100],
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                child: Icon(
+                                                  Icons.bolt,
+                                                  color: Colors.blue,
+                                                ),
+                                              ),
+                                              SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      connector['type'] ?? '',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.blue,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      connector['power'] ?? '',
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    connector['price'] ?? '',
+                                                    style: TextStyle(
+                                                      color: Colors.grey,
+                                                    ),
+                                                  ),
+                                                  SizedBox(height: 4),
+                                                  Container(
+                                                    padding:
+                                                        EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 4,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          connector['status_color'] ??
+                                                          Colors.grey,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      connector['status'] ?? '',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 8),
+                                          ElevatedButton(
+                                            onPressed: () async {
+                                              try {
+                                                if (isAvailable) {
+                                                  await OcppService.remoteStart(
+                                                    chargePointId,
+                                                    connectorId,
+                                                    idTag,
+                                                  );
+                                                  setModalState(() {
+                                                    connector['status'] =
+                                                        'Зарядка';
+                                                    connector['status_color'] =
+                                                        Colors.blue;
+                                                  });
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        'Зарядка начата',
+                                                      ),
+                                                    ),
+                                                  );
+                                                } else {
+                                                  await OcppService.remoteStop(
+                                                    chargePointId,
+                                                  );
+                                                  setModalState(() {
+                                                    connector['status'] =
+                                                        'Доступен';
+                                                    connector['status_color'] =
+                                                        Colors.green;
+                                                  });
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        'Зарядка остановлена',
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              } catch (e) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Ошибка: $e'),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: isAvailable
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                              foregroundColor: Colors.white,
+                                              minimumSize: Size(
+                                                double.infinity,
+                                                48,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(24),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              isAvailable
+                                                  ? 'Начать зарядку'
+                                                  : 'Остановить зарядку',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              station['available'] ?? '',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
+                              // Кнопка Построить маршрут
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: ElevatedButton(
+                                  onPressed: () {},
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    minimumSize: Size(double.infinity, 48),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Построить маршрут',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        station['address'] ?? '',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              station['distance'] ?? '',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.star,
-                                color: Colors.yellow[700],
-                                size: 16,
-                              ),
-                              SizedBox(width: 4),
-                              Text((station['rating'] ?? 0.0).toString()),
                             ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    station['favorite'] == true
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    color: Color.fromARGB(255, 23, 108, 255),
-                                    size: 20,
-                                  ),
-                                  onPressed: () {},
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    station['id'] ?? '',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Row(
-                                  children:
-                                      (station['status'] as List<Color>? ?? [])
-                                          .map<Widget>(
-                                            (color) => Icon(
-                                              Icons.circle,
-                                              size: 8,
-                                              color: color,
-                                            ),
-                                          )
-                                          .toList(),
-                                ),
-                              ],
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            station['name'] ?? 'Неизвестно',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: (station['connectors'] as List? ?? [])
-                            .map<Widget>(
-                              (conn) => Chip(
-                                label: Text(conn['type'] ?? ''),
-                                backgroundColor: Colors.grey[200],
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            station['available'] ?? '',
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      station['address'] ?? '',
+                      style: const TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            station['distance'] ?? '',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.star,
+                              color: Colors.yellow[700],
+                              size: 16,
+                            ),
+                            SizedBox(width: 4),
+                            Text((station['rating'] ?? 0.0).toString()),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  station['favorite'] == true
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: Color.fromARGB(255, 23, 108, 255),
+                                  size: 20,
+                                ),
+                                onPressed: () {},
                               ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ),
+                              Flexible(
+                                child: Text(
+                                  station['id'] ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Row(
+                                children:
+                                    (station['status'] as List<Color>? ?? [])
+                                        .map<Widget>(
+                                          (color) => Icon(
+                                            Icons.circle,
+                                            size: 8,
+                                            color: color,
+                                          ),
+                                        )
+                                        .toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: (station['connectors'] as List? ?? [])
+                          .map<Widget>(
+                            (conn) => Chip(
+                              label: Text(conn['type'] ?? ''),
+                              backgroundColor: Colors.grey[200],
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
