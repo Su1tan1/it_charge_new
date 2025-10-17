@@ -1,7 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:it_charge/main_navigator.dart';
-// import 'package:it_charge/main_navigator.dart';
+import 'package:it_charge/providers/station_provider.dart';
+import 'package:provider/provider.dart';
 import ' screens/auth_screens/email_auth_screen.dart';
 import ' screens/auth_screens/login_choice_screen.dart';
 import ' screens/auth_screens/otp_screen.dart';
@@ -13,18 +14,24 @@ void main() async {
   await Firebase.initializeApp();
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   await messaging.requestPermission(alert: true, badge: true, sound: true);
-  runApp(MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => StationProvider(),
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Phone Auth Demo',
-      // Начальный маршрут — логин
-      initialRoute: '/choice', // Стартуем с выбора
+      initialRoute: '/choice',
       routes: {
-        '/choice': (context) => LoginChoiceScreen(), // Новый старт
+        '/choice': (context) => LoginChoiceScreen(),
         '/phone': (context) => PhoneAuthScreen(),
         '/email': (context) => EmailAuthScreen(),
         '/otp': (context) {
@@ -36,7 +43,8 @@ class MyApp extends StatelessWidget {
             verificationId: args?['verificationId'] ?? '',
           );
         },
-        '/home': (context) => MainNavigator(),
+        '/home': (context) =>
+            MainNavigator(), // Твой MainNavigator (обновлённый ниже)
       },
     );
   }

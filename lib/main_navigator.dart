@@ -32,7 +32,11 @@ class _MainNavigatorState extends State<MainNavigator> {
         centerTitle: true,
         backgroundColor: Colors.blueAccent,
       ),
-      body: screens[currentIndex],
+      body: IndexedStack(
+        // <-- Добавлено: Сохраняет состояние экранов при смене таба
+        index: currentIndex,
+        children: screens,
+      ),
       backgroundColor: const Color.fromARGB(255, 250, 250, 250),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,

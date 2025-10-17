@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:it_charge/ocpp_service.dart';
+import 'package:provider/provider.dart';
+import '../ocpp_service.dart';
+import '../providers/station_provider.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -10,160 +12,123 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   bool _isMapMode = true;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          // Search bar
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: 'Поиск станций...',
-                hintStyle: TextStyle(color: Colors.grey[600]),
-                prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-                suffixIcon: Icon(
-                  Icons.arrow_drop_down,
-                  color: Colors.grey[600],
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+    return Column(
+      children: [
+        // Search bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: TextField(
+            decoration: InputDecoration(
+              hintText: 'Поиск станций...',
+              hintStyle: TextStyle(color: Colors.grey[600]),
+              prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+              suffixIcon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
               ),
-              style: TextStyle(fontSize: 16),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
             ),
+            style: const TextStyle(fontSize: 16),
           ),
-          SizedBox(height: 10),
-          // Elevated Buttons for Map/List toggle
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _isMapMode = true;
-                      });
-                      print('Выбран: Карта');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isMapMode
-                          ? Colors.black
-                          : Colors.grey[200],
-                      foregroundColor: _isMapMode ? Colors.white : Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(15),
-                          bottomLeft: Radius.circular(15),
-                          bottomRight: Radius.circular(15),
-                          topRight: Radius.circular(15),
-                        ),
-                      ),
+        ),
+        const SizedBox(height: 10),
+        // Toggle buttons
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _isMapMode = true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isMapMode
+                        ? Colors.black
+                        : Colors.grey[200],
+                    foregroundColor: _isMapMode ? Colors.white : Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                    child: Text('Карта'),
                   ),
+                  child: const Text('Карта'),
                 ),
-                SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _isMapMode = false;
-                      });
-                      print('Выбран: Список');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: !_isMapMode
-                          ? Colors.black
-                          : Colors.grey[200],
-                      foregroundColor: !_isMapMode
-                          ? Colors.white
-                          : Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(15), // Лёгкое заострение
-                          bottomRight: Radius.circular(15),
-                          bottomLeft: Radius.circular(15),
-                          topLeft: Radius.circular(15),
-                        ),
-                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _isMapMode = false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: !_isMapMode
+                        ? Colors.black
+                        : Colors.grey[200],
+                    foregroundColor: !_isMapMode ? Colors.white : Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                    child: Text('Список'),
                   ),
+                  child: const Text('Список'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Expanded(
-            child: _isMapMode
-                ? Container(
-                    color: Color(0xFFF5F7FA), // Фон карты
-                    child: Stack(
-                      children: [
-                        Placeholder(), // Замена карты
-                        // Имитация меток (синие круги с числами)
-                        // Positioned(left: 100, top: 100, child: _buildMapMarker('2')),
-                        // Positioned(left: 150, top: 150, child: _buildMapMarker('3')),
-                        // Positioned(left: 200, top: 200, child: _buildMapMarker('1')),
-                        // Positioned(left: 50, top: 250, child: _buildMapMarker('4')),
-                      ],
-                    ),
-                  )
-                : _buildListScreen(), // Показываем список при _isMapMode == false
+        ),
+        Expanded(
+          child: _isMapMode
+              ? Container(
+                  color: const Color(0xFFF5F7FA),
+                  child: const Stack(
+                    children: [Placeholder()], // Карта
+                  ),
+                )
+              : Consumer<StationProvider>(
+                  builder: (context, provider, child) =>
+                      _buildListScreen(provider),
+                ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildButton(Icons.location_on, '5', 'Рядом', Colors.blue[100]!),
+              _buildButton(
+                Icons.fiber_manual_record,
+                '12',
+                'Доступно',
+                Colors.green[100]!,
+              ),
+              _buildButton(
+                Icons.arrow_forward,
+                '0.5',
+                'KM',
+                Colors.orange[100]!,
+              ),
+            ],
           ),
-          SizedBox(height: 10),
-          Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildButton(
-                  icon: Icons.location_on,
-                  number: '5',
-                  label: 'Рядом',
-                  backgroundColor: Colors.blue[100]!,
-                ),
-                _buildButton(
-                  icon: Icons.fiber_manual_record,
-                  number: '12',
-                  label: 'Доступно',
-                  backgroundColor: Colors.green[100]!,
-                ),
-                _buildButton(
-                  icon: Icons.arrow_forward,
-                  number: '0.5',
-                  label: 'KM',
-                  backgroundColor: Colors.orange[100]!,
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 10),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+      ],
     );
   }
 
-  Widget _buildButton({
-    required IconData icon,
-    required String number,
-    required String label,
-    required Color backgroundColor,
-  }) {
+  Widget _buildButton(
+    IconData icon,
+    String number,
+    String label,
+    Color bgColor,
+  ) {
     return TextButton(
-      onPressed: () {
-        // Add your onPressed logic here
-      },
+      onPressed: () {},
       style: TextButton.styleFrom(
-        backgroundColor: backgroundColor,
+        backgroundColor: bgColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -172,58 +137,39 @@ class _MapScreenState extends State<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: Colors.black54),
-              SizedBox(width: 4),
+              const SizedBox(width: 4),
               Text(
                 number,
-                style: TextStyle(color: Colors.black87, fontSize: 16),
+                style: const TextStyle(color: Colors.black87, fontSize: 16),
               ),
             ],
           ),
-          SizedBox(height: 4),
-          Text(label, style: TextStyle(color: Colors.black87, fontSize: 14)),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.black87, fontSize: 14),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildListScreen() {
+  Widget _buildListScreen(StationProvider provider) {
     final List<Map<String, dynamic>> stations = [
       {
         'name': 'Кинотеатр "Октябрь" DC150',
         'address': 'Республика Дагестан, Махачкала, ул. Коркмасова, 11',
         'distance': '0.35 km',
-        // 'id': '#8312',
-        'available': '3/3', // Адаптировано на основе status (все green)
-        'time': '⏰ 24/7', // Добавлено для соответствия стилю
-        'rating': 4.8, // Добавлено для соответствия стилю
-        'status': [
-          Colors.green,
-          Colors.green,
-          Colors.green,
-        ], // Оригинальное поле
+        'chargePointId': 'CP1', // Уникальный ID
+        'available': '3/3',
+        'time': '⏰ 24/7',
+        'rating': 4.8,
+        'status': [Colors.green, Colors.green, Colors.green],
         'favorite': false,
         'connectors': [
-          {
-            'type': 'CCS Type 2',
-            'power': 'До 150 кВт',
-            'price': '12 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
-          {
-            'type': 'CHAdeMO',
-            'power': 'До 50 кВт',
-            'price': '10 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
-          {
-            'type': 'Type 2 AC',
-            'power': 'До 22 кВт',
-            'price': '8 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
+          {'type': 'CCS Type 2', 'power': 'До 150 кВт', 'price': '12 ₽/кВт·ч'},
+          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
+          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
         ],
       },
       {
@@ -231,87 +177,43 @@ class _MapScreenState extends State<MapScreen> {
         'address':
             'Республика Дагестан, г. Махачкала, проспект Имама Шамиля, 9А',
         'distance': '1.52 km',
-        // 'id': '#8034',
-        'available': '3/3', // Адаптировано на основе status (все green)
+        'chargePointId': 'CP2', // Уникальный ID
+        'available': '3/3',
         'time': '⏰ 24/7',
         'rating': 4.5,
-        'status': [
-          Colors.green,
-          Colors.green,
-          Colors.green,
-        ], // Оригинальное поле
+        'status': [Colors.green, Colors.green, Colors.green],
         'favorite': false,
         'connectors': [
-          {
-            'type': 'CCS Type 2',
-            'power': 'До 150 кВт',
-            'price': '12 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
-          {
-            'type': 'CHAdeMO',
-            'power': 'До 50 кВт',
-            'price': '10 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
-          {
-            'type': 'Type 2 AC',
-            'power': 'До 22 кВт',
-            'price': '8 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
+          {'type': 'CCS Type 2', 'power': 'До 150 кВт', 'price': '12 ₽/кВт·ч'},
+          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
+          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
         ],
       },
       {
         'name': 'A3C ULTRA HL DC 150 kBt #2',
         'address': 'Республика Дагестан, Махачкала, проспект Имама Шамиля, 9А',
         'distance': '1.53 km',
-        // 'id': '#8347',
-        'available': '2/3', // Адаптировано на основе status (2 green, 1 orange)
+        'chargePointId': 'CP3', // Уникальный ID
+        'available': '2/3',
         'time': '⏰ 24/7',
         'rating': 4.6,
-        'status': [
-          Colors.orange,
-          Colors.green,
-          Colors.green,
-        ], // Оригинальное поле
+        'status': [Colors.orange, Colors.green, Colors.green],
         'favorite': false,
         'connectors': [
-          {
-            'type': 'CCS Type 2',
-            'power': 'До 150 кВт',
-            'price': '12 ₽/кВт·ч',
-            'status': 'Занят',
-            'status_color': Colors.orange,
-          },
-          {
-            'type': 'CHAdeMO',
-            'power': 'До 50 кВт',
-            'price': '10 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
-          {
-            'type': 'Type 2 AC',
-            'power': 'До 22 кВт',
-            'price': '8 ₽/кВт·ч',
-            'status': 'Доступен',
-            'status_color': Colors.green,
-          },
+          {'type': 'CCS Type 2', 'power': 'До 150 кВт', 'price': '12 ₽/кВт·ч'},
+          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
+          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
         ],
       },
-      // Можно добавить больше станций
     ];
 
     return ListView.builder(
-      shrinkWrap: true, // <-- Фикс: Помогает в Column, предотвращает unbounded
-      physics: AlwaysScrollableScrollPhysics(), // Скролл всегда
+      shrinkWrap: true,
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: stations.length,
       itemBuilder: (context, index) {
         final station = stations[index];
+        final chargePointId = station['chargePointId'] ?? 'CP1';
         return Container(
           margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
           child: Card(
@@ -325,7 +227,7 @@ class _MapScreenState extends State<MapScreen> {
                   context: context,
                   isScrollControlled: true,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(
+                    borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(20),
                     ),
                   ),
@@ -336,7 +238,7 @@ class _MapScreenState extends State<MapScreen> {
                           heightFactor: 0.8,
                           child: Column(
                             children: [
-                              // Верхняя панель
+                              // Верхняя панель (твой оригинальный код)
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -347,11 +249,11 @@ class _MapScreenState extends State<MapScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     IconButton(
-                                      icon: Icon(Icons.arrow_back),
+                                      icon: const Icon(Icons.arrow_back),
                                       onPressed: () => Navigator.pop(context),
                                     ),
                                     IconButton(
-                                      icon: Icon(Icons.more_vert),
+                                      icon: const Icon(Icons.more_vert),
                                       onPressed: () {},
                                     ),
                                   ],
@@ -369,7 +271,7 @@ class _MapScreenState extends State<MapScreen> {
                                     Expanded(
                                       child: Text(
                                         station['name'] ?? 'Неизвестно',
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.bold,
                                         ),
@@ -382,7 +284,7 @@ class _MapScreenState extends State<MapScreen> {
                                           color: Colors.yellow[700],
                                           size: 20,
                                         ),
-                                        SizedBox(width: 4),
+                                        const SizedBox(width: 4),
                                         Text(
                                           (station['rating'] ?? 0.0).toString(),
                                         ),
@@ -391,7 +293,7 @@ class _MapScreenState extends State<MapScreen> {
                                   ],
                                 ),
                               ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 8),
                               // Адрес
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -404,7 +306,7 @@ class _MapScreenState extends State<MapScreen> {
                                       color: Colors.grey,
                                       size: 16,
                                     ),
-                                    SizedBox(width: 4),
+                                    const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
                                         station['address'] ?? '',
@@ -417,7 +319,7 @@ class _MapScreenState extends State<MapScreen> {
                                   ],
                                 ),
                               ),
-                              SizedBox(height: 16),
+                              const SizedBox(height: 16),
                               // Чипы
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -445,7 +347,7 @@ class _MapScreenState extends State<MapScreen> {
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                 ),
-                                child: Text(
+                                child: const Text(
                                   'Доступные разъёмы',
                                   style: TextStyle(
                                     fontSize: 16,
@@ -454,10 +356,9 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ),
                               Expanded(
-                                // Только здесь для модалки
                                 child: ListView.builder(
-                                  shrinkWrap: true, // Фикс для nested ListView
-                                  physics: ClampingScrollPhysics(),
+                                  shrinkWrap: true,
+                                  physics: const ClampingScrollPhysics(),
                                   itemCount:
                                       (station['connectors'] as List?)
                                           ?.length ??
@@ -466,13 +367,23 @@ class _MapScreenState extends State<MapScreen> {
                                     final connector =
                                         station['connectors'][connIndex];
                                     final connectorId = connIndex + 1;
-                                    final currentStatus =
-                                        connector['status'] ?? 'Доступен';
+                                    // Чтение из провайдера (глобальное, по chargePointId)
+                                    final savedStatus =
+                                        provider
+                                            .stations[chargePointId]
+                                            ?.connectors[connectorId]
+                                            ?.status ??
+                                        connector['status'] ??
+                                        'Доступен';
+                                    final savedColor =
+                                        provider
+                                            .stations[chargePointId]
+                                            ?.connectors[connectorId]
+                                            ?.statusColor ??
+                                        connector['status_color'] ??
+                                        Colors.green;
                                     final isAvailable =
-                                        currentStatus == 'Доступен';
-                                    final chargePointId =
-                                        station['chargePointId'] ?? 'CP1';
-                                    final idTag = 'TAG123';
+                                        savedStatus == 'Доступен';
 
                                     return Padding(
                                       padding: const EdgeInsets.symmetric(
@@ -484,18 +395,20 @@ class _MapScreenState extends State<MapScreen> {
                                           Row(
                                             children: [
                                               Container(
-                                                padding: EdgeInsets.all(8),
+                                                padding: const EdgeInsets.all(
+                                                  8,
+                                                ),
                                                 decoration: BoxDecoration(
                                                   color: Colors.blue[100],
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                 ),
-                                                child: Icon(
+                                                child: const Icon(
                                                   Icons.bolt,
                                                   color: Colors.blue,
                                                 ),
                                               ),
-                                              SizedBox(width: 12),
+                                              const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
@@ -503,7 +416,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   children: [
                                                     Text(
                                                       connector['type'] ?? '',
-                                                      style: TextStyle(
+                                                      style: const TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
                                                         color: Colors.blue,
@@ -521,29 +434,28 @@ class _MapScreenState extends State<MapScreen> {
                                                 children: [
                                                   Text(
                                                     connector['price'] ?? '',
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       color: Colors.grey,
                                                     ),
                                                   ),
-                                                  SizedBox(height: 4),
+                                                  const SizedBox(height: 4),
                                                   Container(
                                                     padding:
-                                                        EdgeInsets.symmetric(
+                                                        const EdgeInsets.symmetric(
                                                           horizontal: 12,
                                                           vertical: 4,
                                                         ),
                                                     decoration: BoxDecoration(
                                                       color:
-                                                          connector['status_color'] ??
-                                                          Colors.grey,
+                                                          savedColor, // Из провайдера
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                             20,
                                                           ),
                                                     ),
                                                     child: Text(
-                                                      connector['status'] ?? '',
-                                                      style: TextStyle(
+                                                      savedStatus, // Из провайдера
+                                                      style: const TextStyle(
                                                         color: Colors.white,
                                                       ),
                                                     ),
@@ -552,7 +464,7 @@ class _MapScreenState extends State<MapScreen> {
                                               ),
                                             ],
                                           ),
-                                          SizedBox(height: 8),
+                                          const SizedBox(height: 8),
                                           ElevatedButton(
                                             onPressed: () async {
                                               try {
@@ -560,18 +472,20 @@ class _MapScreenState extends State<MapScreen> {
                                                   await OcppService.remoteStart(
                                                     chargePointId,
                                                     connectorId,
-                                                    idTag,
+                                                    'TAG123',
                                                   );
-                                                  setModalState(() {
-                                                    connector['status'] =
-                                                        'Зарядка';
-                                                    connector['status_color'] =
-                                                        Colors.blue;
-                                                  });
+                                                  provider
+                                                      .updateConnectorStatus(
+                                                        chargePointId,
+                                                        connectorId,
+                                                        'Зарядка',
+                                                        Colors.blue,
+                                                      );
+                                                  setModalState(() {});
                                                   ScaffoldMessenger.of(
                                                     context,
                                                   ).showSnackBar(
-                                                    SnackBar(
+                                                    const SnackBar(
                                                       content: Text(
                                                         'Зарядка начата',
                                                       ),
@@ -581,16 +495,15 @@ class _MapScreenState extends State<MapScreen> {
                                                   await OcppService.remoteStop(
                                                     chargePointId,
                                                   );
-                                                  setModalState(() {
-                                                    connector['status'] =
-                                                        'Доступен';
-                                                    connector['status_color'] =
-                                                        Colors.green;
-                                                  });
+                                                  provider.resetConnectorStatus(
+                                                    chargePointId,
+                                                    connectorId,
+                                                  );
+                                                  setModalState(() {});
                                                   ScaffoldMessenger.of(
                                                     context,
                                                   ).showSnackBar(
-                                                    SnackBar(
+                                                    const SnackBar(
                                                       content: Text(
                                                         'Зарядка остановлена',
                                                       ),
@@ -612,7 +525,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   ? Colors.green
                                                   : Colors.red,
                                               foregroundColor: Colors.white,
-                                              minimumSize: Size(
+                                              minimumSize: const Size(
                                                 double.infinity,
                                                 48,
                                               ),
@@ -625,7 +538,7 @@ class _MapScreenState extends State<MapScreen> {
                                               isAvailable
                                                   ? 'Начать зарядку'
                                                   : 'Остановить зарядку',
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 color: Colors.white,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -637,19 +550,21 @@ class _MapScreenState extends State<MapScreen> {
                                   },
                                 ),
                               ),
-                              // Кнопка Построить маршрут
                               Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: ElevatedButton(
                                   onPressed: () {},
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue,
-                                    minimumSize: Size(double.infinity, 48),
+                                    minimumSize: const Size(
+                                      double.infinity,
+                                      48,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(24),
                                     ),
                                   ),
-                                  child: Text(
+                                  child: const Text(
                                     'Построить маршрут',
                                     style: TextStyle(color: Colors.white),
                                   ),
@@ -664,7 +579,10 @@ class _MapScreenState extends State<MapScreen> {
                 );
               },
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -681,7 +599,7 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                         ),
                         Container(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 4,
                           ),
@@ -691,7 +609,10 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                           child: Text(
                             station['available'] ?? '',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ],
@@ -718,7 +639,7 @@ class _MapScreenState extends State<MapScreen> {
                               color: Colors.yellow[700],
                               size: 16,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text((station['rating'] ?? 0.0).toString()),
                           ],
                         ),
@@ -736,7 +657,12 @@ class _MapScreenState extends State<MapScreen> {
                                   station['favorite'] == true
                                       ? Icons.favorite
                                       : Icons.favorite_border,
-                                  color: Color.fromARGB(255, 23, 108, 255),
+                                  color: const Color.fromARGB(
+                                    255,
+                                    23,
+                                    108,
+                                    255,
+                                  ),
                                   size: 20,
                                 ),
                                 onPressed: () {},
