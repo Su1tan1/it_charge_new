@@ -4,10 +4,10 @@ import '../../services/auth_service.dart'; // Импорт сервиса
 class OtpScreen extends StatefulWidget {
   final String phoneNumber; // Номер из предыдущего экрана
   const OtpScreen({
-    Key? key,
+    super.key,
     required this.phoneNumber,
     required verificationId,
-  }) : super(key: key);
+  });
 
   @override
   _OtpScreenState createState() => _OtpScreenState();

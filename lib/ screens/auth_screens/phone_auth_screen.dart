@@ -2,6 +2,8 @@ import 'package:flutter/material.dart'; // Базовые виджеты
 import '../../services/auth_service.dart'; // Импорт сервиса (создадим на шаге 3)
 
 class PhoneAuthScreen extends StatefulWidget {
+  const PhoneAuthScreen({super.key});
+
   // Stateful — для динамики
   @override
   _PhoneAuthScreenState createState() => _PhoneAuthScreenState(); // Создает состояние

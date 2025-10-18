@@ -33,9 +33,7 @@ class AuthService {
       verificationId: _verificationId!,
       smsCode: otp,
     );
-    return await _auth
-        .signInWithCredential(credential)
-        .catchError(_handleError);
+    return await _auth.signInWithCredential(credential);
   }
 
   // Выход
@@ -48,9 +46,10 @@ class AuthService {
     String email,
     String password,
   ) async {
-    return await _auth
-        .createUserWithEmailAndPassword(email: email, password: password)
-        .catchError(_handleError);
+    return await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
   }
 
   // Логин по email/password
@@ -58,9 +57,10 @@ class AuthService {
     String email,
     String password,
   ) async {
-    return await _auth
-        .signInWithEmailAndPassword(email: email, password: password)
-        .catchError(_handleError);
+    return await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
   }
 
   // Отправка email-верификации
