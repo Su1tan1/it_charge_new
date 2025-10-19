@@ -1,6 +1,4 @@
-// lib/widgets/main_navigator.dart
 import 'package:flutter/material.dart';
-// import '../services/auth_service.dart';
 import ' screens/history_screen.dart';
 import ' screens/map_screen.dart';
 import ' screens/profile_screen.dart'; // Для signOut в Profile
@@ -27,10 +25,10 @@ class _MainNavigatorState extends State<MainNavigator> {
       appBar: AppBar(
         title: Text(
           appBarTitles[currentIndex],
-          style: const TextStyle(color: Colors.black),
+          style: const TextStyle(color: Colors.white),
         ),
         centerTitle: true,
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: const Color(0xFF111418),
       ),
       body: IndexedStack(
         // <-- Добавлено: Сохраняет состояние экранов при смене таба
@@ -43,7 +41,7 @@ class _MainNavigatorState extends State<MainNavigator> {
         onTap: (value) => setState(() => currentIndex = value),
         selectedItemColor: Colors.blueAccent,
         unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF111418),
         items: const [
           BottomNavigationBarItem(
             label: 'Карта',

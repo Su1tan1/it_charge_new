@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:it_charge/screens/history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,502 +17,327 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Center(child: CircularProgressIndicator());
+      // Если пользователь не загружен — показать индикатор
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final initials = user.displayName?.isNotEmpty == true
         ? user.displayName!
               .split(' ')
-              .map((name) => name[0].toUpperCase())
+              .map((name) => name.isNotEmpty ? name[0].toUpperCase() : '')
+              .where((s) => s.isNotEmpty)
               .take(2)
               .join()
-        : user.email?.substring(0, 1).toUpperCase() ?? 'U';
+        : (user.email?.isNotEmpty == true
+              ? user.email!.substring(0, 1).toUpperCase()
+              : 'U');
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFF090909),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 80, top: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildProfileHeader(initials, user),
-            _buildBalance(),
-
-            // Раздел способов оплаты
-            const SizedBox(height: 24),
-            _buildPays(),
-
-            // Раздел избранных станций
-            const SizedBox(height: 24),
-            _buildFavoritesStations(),
-
-            // Раздел "Прочее"
-            const SizedBox(height: 24),
-            _buildOtherSection(), // ← ИЗМЕНЕНО: Вынесли в отдельную функцию
-
-            const SizedBox(height: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildProfileHeader(initials, user),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildGradientBalance(),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildSectionCard('Платежи', [
+                _buildSectionItem(Icons.credit_card, 'Способы оплаты', '2'),
+                _buildSectionItem(Icons.history, 'История транзакций', null),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildSectionCard('Избранное', [
+                _buildSectionItem(
+                  Icons.favorite_border,
+                  'Избранные станции',
+                  '5',
+                ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildSectionCard('Настройки', [
+                _buildSectionItem(
+                  Icons.notifications_none,
+                  'Уведомления',
+                  null,
+                ),
+                _buildSectionItem(Icons.settings, 'Настройки', null),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: _buildOtherSection(),
+            ),
+            // const SizedBox(height: 24),
           ],
         ),
       ),
+      // bottomNavigationBar: _buildBottomNav(),
     );
   }
 
   // Аккаунт
-  Container _buildProfileHeader(String initials, User user) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
+  Widget _buildProfileHeader(String initials, User user) {
+    return Row(
+      children: [
+        Stack(
           children: [
             CircleAvatar(
-              radius: 24,
-              backgroundColor: Colors.blue,
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              radius: 34,
+              backgroundImage: user.photoURL != null
+                  ? NetworkImage(user.photoURL!)
+                  : null,
+              backgroundColor: const Color(0xFF1F2933),
+              child: user.photoURL == null
+                  ? Text(
+                      initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    )
+                  : null,
+            ),
+            Positioned(
+              right: 0,
+              bottom: 4,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black, width: 2),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                user.displayName ?? 'Без имени',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                user.email ?? '',
+                style: TextStyle(color: Colors.grey[400], fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white24,
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.settings, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGradientBalance() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00C6A7), Color(0xFF70E000)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Баланс',
+                  style: TextStyle(color: Colors.black54, fontSize: 14),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '₽2,450',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black.withOpacity(0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: Row(
+              children: const [
+                Icon(Icons.add, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Пополнить', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(String title, List<Widget> items) {
+    return Container(
+      padding: EdgeInsets.zero,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1113),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              title,
+              style: TextStyle(color: Colors.grey[400], fontSize: 14),
+            ),
+          ),
+          ...items,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionItem(IconData icon, String label, String? badge) {
+    return InkWell(
+      onTap: () {
+        if (label == 'История транзакций') {
+          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
+          return;
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: const BoxDecoration(
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(14),
+            bottomRight: Radius.circular(14),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF111418),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: const Color(0xFF00D3C0)),
+            ),
+            const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.displayName ?? 'Без имени',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    user.email ?? '',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                  ),
-                ],
+              child: Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
-            IconButton(
-              onPressed: () {
-                // Логика открытия настроек
-              },
-              icon: const Icon(Icons.settings, color: Colors.grey),
-            ),
+            if (badge != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00B8A0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(badge, style: const TextStyle(color: Colors.white)),
+              ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_forward_ios, color: Colors.grey[600], size: 16),
           ],
         ),
       ),
     );
   }
 
-  // Баланс
-  Container _buildBalance() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            spreadRadius: 0,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.account_balance_wallet,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Баланс',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  // Логика пополнения
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.blue,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                ),
-                child: const Text(
-                  'Пополнить',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Center(
-            child: Text(
-              '2450.00 ₽',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Способы оплаты
-  Container _buildPays() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Способы оплаты',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              IconButton(
-                onPressed: () {
-                  // Логика добавления способа оплаты
-                },
-                icon: const Icon(Icons.add, color: Colors.blue),
-                style: IconButton.styleFrom(backgroundColor: Colors.grey[100]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Карта
-          ElevatedButton(
-            onPressed: () {
-              // Логика выбора карты
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[50],
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.credit_card, color: Colors.grey),
-                    SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '**** **** ****',
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                        Text(
-                          '4242',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Apple Pay
-          ElevatedButton(
-            onPressed: () {
-              // Логика выбора Apple Pay
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[50],
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.payment, color: Colors.blue),
-                    SizedBox(width: 12),
-                    Text(
-                      'Apple Pay',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Избранные станции
-  Container _buildFavoritesStations() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Избранные станции',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Станция 1
-          ElevatedButton(
-            onPressed: () {
-              // Логика перехода на страницу станции
-              print('Переход на станцию: ТСЛ Мера Белая Дача');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[50],
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.star, color: Colors.amber, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'ТСЛ Мера Белая Дача',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        '0.5 км • 3 мин',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Станция 2
-          ElevatedButton(
-            onPressed: () {
-              // Логика перехода на страницу станции
-              print('Переход на станцию: Ларковская ОЦС Лентра');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[50],
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.star, color: Colors.amber, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Ларковская ОЦС Лентра',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        '1.2 км • 2 мин',
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  //  раздел "Прочее" из ListView
   Widget _buildOtherSection() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: const Color(0xFF0F1113),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ElevatedButton(
+          //   onPressed: () {},
+          //   style: ElevatedButton.styleFrom(
+          //     backgroundColor: Colors.transparent,
+          //     elevation: 0,
+          //     padding: const EdgeInsets.symmetric(vertical: 8),
+          //     shape: RoundedRectangleBorder(
+          //       borderRadius: BorderRadius.circular(8),
+          //     ),
+          //   ),
+          //   child: Row(
+          //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //     children: const [
+          //       Text(
+          //         'Уведомления',
+          //         style: TextStyle(color: Colors.white, fontSize: 16),
+          //       ),
+          //       Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          //     ],
+          //   ),
+          // ),
           const SizedBox(height: 8),
-          // Уведомления
           ElevatedButton(
-            onPressed: () {
-              // Логика перехода к уведомлениям
-            },
+            onPressed: () {},
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: Colors.transparent,
               elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Уведомления', style: TextStyle(fontSize: 16)),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Помощь и поддержка
-          ElevatedButton(
-            onPressed: () {
-              // Логика перехода к помощи и поддержке
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -520,73 +346,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Помощь и поддержка',
-                  style: TextStyle(fontSize: 16),
+                  'Темная тема',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
                 ),
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey,
+                Switch(
+                  value: _darkThemeEnabled,
+                  onChanged: (v) => setState(() => _darkThemeEnabled = v),
+                  activeColor: Colors.green,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          // Темная тема
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _darkThemeEnabled = !_darkThemeEnabled;
-              });
+            onPressed: () async {
+              // выйти из аккаунта
+              await FirebaseAuth.instance.signOut();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: Colors.transparent,
               elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Темная тема', style: TextStyle(fontSize: 16)),
-                Switch(
-                  value: _darkThemeEnabled,
-                  onChanged: (value) {
-                    setState(() {
-                      _darkThemeEnabled = value;
-                    });
-                  },
-                  activeThumbColor: Colors.blueAccent,
+              children: const [
+                Text(
+                  'Выйти',
+                  style: TextStyle(color: Colors.red, fontSize: 16),
                 ),
-              ],
-            ),
-          ),
-          // Выйти
-          ElevatedButton(
-            onPressed: () {
-              // Логика выхода из аккаунта
-              // _showLogoutDialog();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.red,
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              padding: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Выйти', style: TextStyle(fontSize: 16)),
                 Icon(Icons.exit_to_app, size: 16, color: Colors.red),
               ],
             ),
@@ -596,7 +387,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // Вспомогательная функция для создания ListTile
+  // Widget _buildBottomNav() {
+  //   return Container(
+  //     height: 72,
+  //     decoration: BoxDecoration(
+  //       color: Colors.black,
+  //       boxShadow: [
+  //         BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 10),
+  //       ],
+  //     ),
+  //     // child: Row(
+  //     //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  //     //   children: [
+  //     //     Column(
+  //     //       mainAxisSize: MainAxisSize.min,
+  //     //       children: [
+  //     //         Icon(Icons.place, color: Colors.grey),
+  //     //         const SizedBox(height: 4),
+  //     //         Text('Карта', style: TextStyle(color: Colors.grey, fontSize: 12)),
+  //     //       ],
+  //     //     ),
+  //     //     Column(
+  //     //       mainAxisSize: MainAxisSize.min,
+  //     //       children: [
+  //     //         Icon(Icons.history, color: Colors.grey),
+  //     //         const SizedBox(height: 4),
+  //     //         Text(
+  //     //           'История',
+  //     //           style: TextStyle(color: Colors.grey, fontSize: 12),
+  //     //         ),
+  //     //       ],
+  //     //     ),
+  //     //     Container(
+  //     //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     //       decoration: BoxDecoration(
+  //     //         gradient: const LinearGradient(
+  //     //           colors: [Color(0xFF00C6A7), Color(0xFF70E000)],
+  //     //         ),
+  //     //         borderRadius: BorderRadius.circular(16),
+  //     //       ),
+  //     //       child: Column(
+  //     //         mainAxisSize: MainAxisSize.min,
+  //     //         children: [
+  //     //           const Icon(Icons.person, color: Colors.white),
+  //     //           const SizedBox(height: 4),
+  //     //           const Text(
+  //     //             'Профиль',
+  //     //             style: TextStyle(color: Colors.white, fontSize: 12),
+  //     //           ),
+  //     //         ],
+  //     //       ),
+  //     //     ),
+  //     //   ],
+  //     // ),
+  //   );
+  // }
 }
-
-class StationDetailsScreen {}
