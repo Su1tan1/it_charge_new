@@ -43,8 +43,7 @@ class MyApp extends StatelessWidget {
             verificationId: args?['verificationId'] ?? '',
           );
         },
-        '/home': (context) =>
-            MainNavigator(), // Твой MainNavigator (обновлённый ниже)
+        '/home': (context) => MainNavigator(),
       },
     );
   }

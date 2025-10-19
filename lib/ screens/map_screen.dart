@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../ocpp_service.dart';
+import '../services/ocpp_service.dart';
 import '../providers/station_provider.dart';
+import '../models/station_model.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -95,7 +96,7 @@ class _MapScreenState extends State<MapScreen> {
               ? _buildMapView()
               : Consumer<StationProvider>(
                   builder: (context, provider, child) =>
-                      _buildListScreen(provider),
+                      _buildListScreen(context, provider),
                 ),
         ),
         const SizedBox(height: 10),
@@ -124,7 +125,7 @@ class _MapScreenState extends State<MapScreen> {
 
   void _setMode(bool isMap) {
     setState(() => _isMapMode = isMap);
-    print('Выбран: ${isMap ? 'Карта' : 'Список'}');
+    debugPrint('Выбран: ${isMap ? 'Карта' : 'Список'}');
   }
 
   // Построение карты
@@ -136,77 +137,35 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   //Список станций
-  Widget _buildListScreen(StationProvider provider) {
-    final List<Map<String, dynamic>> stations = [
-      {
-        'name': 'Кинотеатр "Октябрь" DC150',
-        'address': 'Республика Дагестан, Махачкала, ул. Коркмасова, 11',
-        'distance': '0.35 km',
-        'chargePointId': 'CP1',
-        'available': '2/3',
-        'time': '⏰ 24/7',
-        'rating': 4.8,
-        'status': [Colors.orange, Colors.green, Colors.green],
-        'favorite': false,
-        'connectors': [
-          {
-            'type': 'CCS Type 2',
-            'power': 'До 150 кВт',
-            'price': '12 ₽/кВт·ч',
-            'status': 'Занят',
-            'status_color': Colors.orange,
-          },
-          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
-          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
-        ],
+  Widget _buildListScreen(BuildContext context, StationProvider provider) {
+    final stations = provider.stations;
+    // debugPrint(provider.isLoading.toString());
+    if (provider.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (provider.errorMessage != null) {
+      return Center(child: Text(provider.errorMessage!));
+    }
+    if (stations.isEmpty) {
+      return Center(child: Text('Станции не найдены'));
+    }
+    return RefreshIndicator(
+      onRefresh: () async {
+        try {
+          await provider.fetchStations();
+        } catch (e) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Ошибка обновления: $e')));
+        }
       },
-      {
-        'name': 'A3C ULTRA HL DC240 #3',
-        'address':
-            'Республика Дагестан, г. Махачкала, проспект Имама Шамиля, 9А',
-        'distance': '1.52 km',
-        'chargePointId': 'CP2',
-        'available': '3/3',
-        'time': '⏰ 24/7',
-        'rating': 4.5,
-        'status': [Colors.green, Colors.green, Colors.green],
-        'favorite': false,
-        'connectors': [
-          {'type': 'CCS Type 2', 'power': 'До 150 кВт', 'price': '12 ₽/кВт·ч'},
-          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
-          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
-        ],
-      },
-      {
-        'name': 'A3C ULTRA HL DC 150 kBt #2',
-        'address': 'Республика Дагестан, Махачкала, проспект Имама Шамиля, 9А',
-        'distance': '1.53 km',
-        'chargePointId': 'CP3',
-        'available': '2/3',
-        'time': '⏰ 24/7',
-        'rating': 4.6,
-        'status': [Colors.orange, Colors.green, Colors.green],
-        'favorite': false,
-        'connectors': [
-          {
-            'type': 'CCS Type 2',
-            'power': 'До 150 кВт',
-            'status': 'Занят',
-            'status_color': Colors.orange,
-            'price': '12 ₽/кВт·ч',
-          },
-          {'type': 'CHAdeMO', 'power': 'До 50 кВт', 'price': '10 ₽/кВт·ч'},
-          {'type': 'Type 2 AC', 'power': 'До 22 кВт', 'price': '8 ₽/кВт·ч'},
-        ],
-      },
-    ];
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: stations.length,
-      itemBuilder: (context, index) =>
-          _StationListItem(station: stations[index], provider: provider),
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: stations.length,
+        itemBuilder: (context, index) =>
+            _StationListItem(station: stations[index], provider: provider),
+      ),
     );
   }
 
@@ -270,14 +229,14 @@ class _MapScreenState extends State<MapScreen> {
 
 // Элемент списка
 class _StationListItem extends StatelessWidget {
-  final Map<String, dynamic> station;
+  final Station station;
   final StationProvider provider;
 
   const _StationListItem({required this.station, required this.provider});
 
   @override
   Widget build(BuildContext context) {
-    final chargePointId = station['chargePointId'] ?? 'CP1';
+    final chargePointId = station.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 12, left: 12, right: 12),
       child: Card(
@@ -297,7 +256,7 @@ class _StationListItem extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        station['name'] ?? 'Неизвестно',
+                        station.name.isNotEmpty ? station.name : 'Неизвестно',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -314,7 +273,7 @@ class _StationListItem extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        station['available'] ?? '',
+                        station.available,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 12,
@@ -325,7 +284,7 @@ class _StationListItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  station['address'] ?? '',
+                  station.address,
                   style: const TextStyle(color: Colors.grey, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
@@ -334,7 +293,7 @@ class _StationListItem extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        station['distance'] ?? '',
+                        station.distance,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -342,7 +301,7 @@ class _StationListItem extends StatelessWidget {
                       children: [
                         Icon(Icons.star, color: Colors.yellow[700], size: 16),
                         const SizedBox(width: 4),
-                        Text((station['rating'] ?? 0.0).toString()),
+                        Text(station.rating.toString()),
                       ],
                     ),
                   ],
@@ -356,23 +315,24 @@ class _StationListItem extends StatelessWidget {
                         children: [
                           IconButton(
                             icon: Icon(
-                              station['favorite'] == true
+                              station.favorite
                                   ? Icons.favorite
                                   : Icons.favorite_border,
                               color: const Color.fromARGB(255, 23, 108, 255),
                               size: 20,
                             ),
-                            onPressed: () {},
+                            onPressed: () =>
+                                provider.toggleFavorite(station.id),
                           ),
                           Flexible(
                             child: Text(
-                              station['id'] ?? '',
+                              station.id,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Row(
-                            children: (station['status'] as List<Color>? ?? [])
+                            children: station.status
                                 .map(
                                   (color) =>
                                       Icon(Icons.circle, size: 8, color: color),
@@ -387,10 +347,10 @@ class _StationListItem extends StatelessWidget {
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
-                  children: (station['connectors'] as List? ?? [])
+                  children: station.connectors
                       .map<Widget>(
                         (conn) => Chip(
-                          label: Text(conn['type'] ?? ''),
+                          label: Text(conn.type),
                           backgroundColor: Colors.grey[200],
                         ),
                       )
@@ -423,7 +383,7 @@ class _StationListItem extends StatelessWidget {
 
 // Модалка (Bottom sheet)
 class _StationModal extends StatefulWidget {
-  final Map<String, dynamic> station;
+  final Station station;
   final String chargePointId;
   final StationProvider provider;
 
@@ -466,7 +426,9 @@ class _StationModalState extends State<_StationModal> {
               children: [
                 Expanded(
                   child: Text(
-                    widget.station['name'] ?? 'Неизвестно',
+                    widget.station.name.isNotEmpty
+                        ? widget.station.name
+                        : 'Неизвестно',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -477,7 +439,7 @@ class _StationModalState extends State<_StationModal> {
                   children: [
                     Icon(Icons.star, color: Colors.yellow[700], size: 20),
                     const SizedBox(width: 4),
-                    Text((widget.station['rating'] ?? 0.0).toString()),
+                    Text((widget.station.rating).toString()),
                   ],
                 ),
               ],
@@ -493,7 +455,7 @@ class _StationModalState extends State<_StationModal> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    widget.station['address'] ?? '',
+                    widget.station.address,
                     style: TextStyle(color: Colors.grey[700]),
                     overflow: TextOverflow.visible,
                   ),
@@ -509,15 +471,15 @@ class _StationModalState extends State<_StationModal> {
               spacing: 8,
               children: [
                 Chip(
-                  label: Text(widget.station['available'] ?? ''),
+                  label: Text(widget.station.available),
                   backgroundColor: Colors.green[100],
                 ),
                 Chip(
-                  label: Text(widget.station['distance'] ?? ''),
+                  label: Text(widget.station.distance),
                   backgroundColor: Colors.grey[200],
                 ),
                 Chip(
-                  label: Text(widget.station['time'] ?? ''),
+                  label: Text(widget.station.time),
                   backgroundColor: Colors.grey[200],
                 ),
               ],
@@ -559,7 +521,7 @@ class _StationModalState extends State<_StationModal> {
 
   //Доступные коннекторы
   Widget _buildConnectorsList(BuildContext context) {
-    final connectors = widget.station['connectors'] as List? ?? [];
+    final connectors = widget.station.connectors;
     return ListView.builder(
       shrinkWrap: true,
       physics: const ClampingScrollPhysics(), // Плавная прокрутка
@@ -567,25 +529,29 @@ class _StationModalState extends State<_StationModal> {
       itemBuilder: (context, connIndex) {
         final connector = connectors[connIndex];
         final connectorId = connIndex + 1;
-        final savedStatus =
-            widget
-                .provider
-                .stations[widget.chargePointId]
-                ?.connectors[connectorId]
-                ?.status ??
-            connector['status'] ??
-            'Доступен';
-        final savedColor =
-            widget
-                .provider
-                .stations[widget.chargePointId]
-                ?.connectors[connectorId]
-                ?.statusColor ??
-            connector['status_color'] ??
-            Colors.green;
-        final isAvailable = savedStatus == 'Доступен';
-        final isCharging = savedStatus == 'Зарядка';
-        final isOccupied = savedStatus == 'Занят';
+        // Поиск станции и коннектора в провайдере
+        final stationFromProvider = widget.provider.stations.firstWhere(
+          (s) => s.id == widget.chargePointId,
+          orElse: () => Station.empty(),
+        );
+        final providerConnector = stationFromProvider.connectors.firstWhere(
+          (c) => c.id == connectorId,
+          orElse: () => Connector(id: 0, type: '', power: '', price: ''),
+        );
+
+        final savedStatus = providerConnector.id != 0
+            ? providerConnector.status
+            : (connector.status);
+        final savedColor = providerConnector.id != 0
+            ? providerConnector.statusColor
+            : connector.statusColor;
+        final isAvailable =
+            savedStatus.toLowerCase() == 'available' ||
+            savedStatus == 'Доступен';
+        final isCharging =
+            savedStatus.toLowerCase() == 'charging' || savedStatus == 'Зарядка';
+        final isOccupied =
+            savedStatus.toLowerCase() == 'occupied' || savedStatus == 'Занят';
 
         return Padding(
           padding: _MapScreenState._connectorPadding,
@@ -601,6 +567,8 @@ class _StationModalState extends State<_StationModal> {
                 isOccupied,
                 connectorId,
                 context,
+                providerConnector,
+                connector,
               ),
             ],
           ),
@@ -610,11 +578,7 @@ class _StationModalState extends State<_StationModal> {
   }
 
   //Инфо коннектора
-  Widget _buildConnectorRow(
-    Map<String, dynamic> connector,
-    String status,
-    Color color,
-  ) {
+  Widget _buildConnectorRow(Connector connector, String status, Color color) {
     return Row(
       children: [
         Container(
@@ -631,23 +595,20 @@ class _StationModalState extends State<_StationModal> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                connector['type'] ?? '',
+                connector.type,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.blue,
                 ),
               ),
-              Text(connector['power'] ?? ''),
+              Text(connector.power),
             ],
           ),
         ),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              connector['price'] ?? '',
-              style: const TextStyle(color: Colors.grey),
-            ),
+            Text(connector.price, style: const TextStyle(color: Colors.grey)),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -670,6 +631,8 @@ class _StationModalState extends State<_StationModal> {
     bool isOccupied,
     int connectorId,
     BuildContext context,
+    Connector providerConnector,
+    Connector connector,
   ) {
     return ElevatedButton(
       onPressed: isOccupied
@@ -677,7 +640,7 @@ class _StationModalState extends State<_StationModal> {
           : () async {
               try {
                 if (isAvailable) {
-                  await OcppService.remoteStart(
+                  final txId = await OcppService.remoteStart(
                     widget.chargePointId,
                     connectorId,
                     'TAG123',
@@ -687,9 +650,17 @@ class _StationModalState extends State<_StationModal> {
                     connectorId,
                     'Зарядка',
                     Colors.blue,
+                    transactionId: txId,
                   );
                 } else if (isCharging) {
-                  await OcppService.remoteStop(widget.chargePointId);
+                  final txId = providerConnector.id != 0
+                      ? providerConnector.transactionId
+                      : connector.transactionId;
+                  await OcppService.remoteStop(
+                    widget.chargePointId,
+                    connectorId,
+                    txId,
+                  );
                   widget.provider.resetConnectorStatus(
                     widget.chargePointId,
                     connectorId,
