@@ -45,6 +45,8 @@ class StationProvider extends ChangeNotifier {
       }
     } catch (e) {
       errorMessage = 'Ошибка: $e';
+      // Дополнительный лог для отладки — покажет в консоли причину ошибки
+      debugPrint('fetchStations error: $e');
     } finally {
       isLoading = false;
       notifyListeners();

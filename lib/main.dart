@@ -16,7 +16,7 @@ void main() async {
   await messaging.requestPermission(alert: true, badge: true, sound: true);
   runApp(
     ChangeNotifierProvider(
-      create: (context) => StationProvider(),
+      create: (context) => StationProvider(autoStart: true),
       child: MyApp(),
     ),
   );

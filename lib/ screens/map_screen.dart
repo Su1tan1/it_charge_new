@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/ocpp_service.dart';
 import '../providers/station_provider.dart';
 import '../models/station_model.dart';
+import 'charging_session_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -95,8 +95,33 @@ class _MapScreenState extends State<MapScreen> {
           child: _isMapMode
               ? _buildMapView()
               : Consumer<StationProvider>(
-                  builder: (context, provider, child) =>
-                      _buildListScreen(context, provider),
+                  builder: (context, provider, child) {
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        try {
+                          await provider.fetchStations();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Ошибка обновления: $e')),
+                          );
+                        }
+                      },
+                      child: provider.isLoading
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height * 0.6,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : _buildListScreen(context, provider),
+                    );
+                  },
                 ),
         ),
         const SizedBox(height: 10),
@@ -112,14 +137,32 @@ class _MapScreenState extends State<MapScreen> {
     bool isActive,
     VoidCallback onPressed,
   ) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isActive ? Colors.black : Colors.grey[200],
-        foregroundColor: isActive ? Colors.white : Colors.black,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: isActive
+            ? const LinearGradient(
+                colors: [Color(0xFF00C6A7), Color(0xFF70E000)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              )
+            : LinearGradient(
+                colors: [Colors.grey[200]!, Colors.grey[300]!],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+        borderRadius: BorderRadius.circular(8), // настроить под ваш дизайн
       ),
-      child: Text(label),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent, // прозрачный фон
+          shadowColor: Colors.transparent, // убрать тень
+          foregroundColor: isActive
+              ? Colors.white
+              : Colors.black87, // цвет текста
+        ),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
     );
   }
 
@@ -139,33 +182,28 @@ class _MapScreenState extends State<MapScreen> {
   //Список станций
   Widget _buildListScreen(BuildContext context, StationProvider provider) {
     final stations = provider.stations;
-    // debugPrint(provider.isLoading.toString());
+    debugPrint(provider.isLoading.toString());
     if (provider.isLoading) {
+      // Should not reach here when wrapped by RefreshIndicator (we handle loading above)
       return const Center(child: CircularProgressIndicator());
     }
     if (provider.errorMessage != null) {
       return Center(child: Text(provider.errorMessage!));
     }
     if (stations.isEmpty) {
-      return Center(child: Text('Станции не найдены'));
+      return Center(
+        child: Text(
+          'Станции не найдены',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
     }
-    return RefreshIndicator(
-      onRefresh: () async {
-        try {
-          await provider.fetchStations();
-        } catch (e) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Ошибка обновления: $e')));
-        }
-      },
-      child: ListView.builder(
-        shrinkWrap: true,
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: stations.length,
-        itemBuilder: (context, index) =>
-            _StationListItem(station: stations[index], provider: provider),
-      ),
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: stations.length,
+      itemBuilder: (context, index) =>
+          _StationListItem(station: stations[index], provider: provider),
     );
   }
 
@@ -175,14 +213,14 @@ class _MapScreenState extends State<MapScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildButton(Icons.location_on, '5', 'Рядом', Colors.blue[100]!),
+          _buildButton(Icons.location_on, '5', 'Рядом', Colors.blue[400]!),
           _buildButton(
             Icons.fiber_manual_record,
             '12',
             'Доступно',
-            Colors.green[100]!,
+            Colors.green[400]!,
           ),
-          _buildButton(Icons.arrow_forward, '0.5', 'KM', Colors.orange[100]!),
+          _buildButton(Icons.arrow_forward, '0.5', 'KM', Colors.orange[400]!),
         ],
       ),
     );
@@ -366,6 +404,8 @@ class _StationListItem extends StatelessWidget {
 
   //Нижнее всплывающее окно
   void _showStationModal(BuildContext context, String chargePointId) {
+    final provider = this.provider;
+    final station = this.station;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -639,38 +679,13 @@ class _StationModalState extends State<_StationModal> {
           ? null
           : () async {
               try {
-                if (isAvailable) {
-                  final txId = await OcppService.remoteStart(
-                    widget.chargePointId,
-                    connectorId,
-                    'TAG123',
-                  );
-                  widget.provider.updateConnectorStatus(
-                    widget.chargePointId,
-                    connectorId,
-                    'Зарядка',
-                    Colors.blue,
-                    transactionId: txId,
-                  );
-                } else if (isCharging) {
-                  final txId = providerConnector.id != 0
-                      ? providerConnector.transactionId
-                      : connector.transactionId;
-                  await OcppService.remoteStop(
-                    widget.chargePointId,
-                    connectorId,
-                    txId,
-                  );
-                  widget.provider.resetConnectorStatus(
-                    widget.chargePointId,
-                    connectorId,
-                  );
-                }
-                if (mounted) setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      isAvailable ? 'Зарядка начата' : 'Зарядка остановлена',
+                // Открываем экран сессии зарядки — он выполнит запросы start/stop и будет опрашивать статус
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChargingSessionScreen(
+                      station: widget.station,
+                      connector: connector,
+                      connectorIndex: connectorId,
                     ),
                   ),
                 );

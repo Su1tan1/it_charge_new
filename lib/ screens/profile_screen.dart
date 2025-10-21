@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:it_charge/screens/history_screen.dart';
+import 'history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -254,7 +254,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return InkWell(
       onTap: () {
         if (label == 'История транзакций') {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
           return;
         }
       },
@@ -337,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -366,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.all(15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),

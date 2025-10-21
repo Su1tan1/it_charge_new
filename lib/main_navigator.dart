@@ -35,7 +35,7 @@ class _MainNavigatorState extends State<MainNavigator> {
         index: currentIndex,
         children: screens,
       ),
-      backgroundColor: const Color.fromARGB(255, 250, 250, 250),
+      backgroundColor: const Color.fromARGB(255, 29, 27, 56),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (value) => setState(() => currentIndex = value),
@@ -45,7 +45,7 @@ class _MainNavigatorState extends State<MainNavigator> {
         items: const [
           BottomNavigationBarItem(
             label: 'Карта',
-            icon: Icon(Icons.map_outlined),
+            icon: Icon(Icons.location_on_outlined),
           ),
           BottomNavigationBarItem(
             label: 'История',

@@ -28,8 +28,9 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
-  /// Load transactions for a specific station
-  Future<void> loadForStation(String stationId) async {
+  /// Загрузка транзакций для конкретной станции
+  Future<void> loadForStation(String stationId, {bool force = false}) async {
+    if (_loading && !force) return;
     _loading = true;
     _error = null;
     notifyListeners();
