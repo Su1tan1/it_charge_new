@@ -173,13 +173,17 @@ class Connector {
     );
   }
 
+  set deltaKWh(double deltaKWh) {}
+
+  set currentKWh(double currentKWh) {}
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'type': type,
     'power': power,
     'price': price,
     'status': status,
-    'status_color': statusColor.value.toString(),
+    'status_color': statusColor.toString(),
     'transactionId': transactionId,
     'lastMeterValue': lastMeterValue,
     'lastMeterTimestamp': lastMeterTimestamp?.toIso8601String(),

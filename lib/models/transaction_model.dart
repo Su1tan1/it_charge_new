@@ -62,6 +62,8 @@ class Transaction {
     );
   }
 
+  get totalKWh => null;
+
   Map<String, dynamic> toJson() => {
     'transactionId': transactionId,
     'chargePointId': chargePointId,
@@ -75,4 +77,27 @@ class Transaction {
     'meterStop': meterStop,
     'cost': cost,
   };
+
+  Transaction copyWith({
+    required double totalKWh,
+    double? cost,
+    required String stopTimestamp,
+    required String state,
+  }) {
+    return Transaction(
+      transactionId: transactionId,
+      chargePointId: chargePointId,
+      connectorId: connectorId,
+      userId: userId,
+      startTime: startTime,
+      stopTime: DateTime.parse(stopTimestamp),
+      energy: totalKWh,
+      status: state,
+      meterStart: meterStart,
+      meterStop: meterStop,
+      cost: cost ?? this.cost,
+    );
+  }
+
+  static empty() {}
 }

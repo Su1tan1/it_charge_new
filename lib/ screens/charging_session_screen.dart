@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -199,8 +201,9 @@ class _ChargingSessionScreenState extends State<ChargingSessionScreen> {
       // Merge existing transaction data with stop response
       final currentMap = _currentTx?.toJson() ?? {};
       if (respMap['status'] != null) currentMap['status'] = respMap['status'];
-      if (respMap['totalKWh'] != null)
+      if (respMap['totalKWh'] != null) {
         currentMap['energy'] = respMap['totalKWh'];
+      }
       if (respMap['cost'] != null) currentMap['cost'] = respMap['cost'];
       currentMap['stopTime'] = DateTime.now().toIso8601String();
 
