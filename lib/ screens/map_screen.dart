@@ -1,7 +1,9 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../providers/station_provider.dart';
 import '../models/station_model.dart';
 import 'charging_session_screen.dart';
@@ -15,6 +17,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   bool _isMapMode = true;
+
+  final Completer<GoogleMapController> _controller =
+      Completer<GoogleMapController>();
 
   // Константы для стилей
   static const EdgeInsets _searchPadding = EdgeInsets.symmetric(
@@ -95,17 +100,35 @@ class _MapScreenState extends State<MapScreen> {
         ),
         Expanded(
           child: _isMapMode
-              ? _buildMapView()
+              ? Consumer<StationProvider>(
+                  builder: (context, provider, child) {
+                    return _buildMapView(context, provider);
+                  },
+                )
               : Consumer<StationProvider>(
                   builder: (context, provider, child) {
                     return RefreshIndicator(
                       onRefresh: () async {
                         try {
-                          await provider.fetchStations();
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Ошибка обновления: $e')),
+                          // Пытаемся загрузить через WebSocket с fallback на HTTP
+                          // Добавляем общий timeout для всей операции
+                          await provider.fetchStationsWithWebSocket().timeout(
+                            const Duration(seconds: 10),
+                            onTimeout: () {
+                              throw TimeoutException(
+                                'Загрузка станций заняла слишком много времени',
+                              );
+                            },
                           );
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Ошибка обновления: $e'),
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
                         }
                       },
                       child: provider.isLoading
@@ -193,11 +216,52 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Выбран: ${isMap ? 'Карта' : 'Список'}');
   }
 
+  Set<Marker> _createMarkers(List<Station> stations) {
+    return stations
+        .where((station) => station.lat != null && station.lng != null)
+        .map((station) {
+          return Marker(
+            markerId: MarkerId(station.id),
+            position: LatLng(station.lat!, station.lng!),
+            infoWindow: InfoWindow(
+              title: station.name,
+              snippet: station.address,
+            ),
+            onTap: () {
+              // Можно добавить навигацию к модалу станции
+            },
+          );
+        })
+        .toSet();
+  }
+
   // Построение карты
-  Widget _buildMapView() {
-    return Container(
-      color: const Color(0xFFF5F7FA),
-      child: const Stack(children: [Placeholder()]),
+  Widget _buildMapView(BuildContext context, StationProvider provider) {
+    final stations = provider.stations;
+    final markers = _createMarkers(stations);
+
+    // Начальная позиция: первая станция с координатами или Москва
+    LatLng initialPosition;
+    if (stations.isNotEmpty &&
+        stations.first.lat != null &&
+        stations.first.lng != null) {
+      initialPosition = LatLng(stations.first.lat!, stations.first.lng!);
+    } else {
+      initialPosition = const LatLng(55.7558, 37.6173); // Москва
+    }
+
+    return GoogleMap(
+      mapType: MapType.normal,
+      initialCameraPosition: CameraPosition(
+        target: initialPosition,
+        zoom: 14.0,
+      ),
+      markers: markers,
+      onMapCreated: (GoogleMapController controller) {
+        if (!_controller.isCompleted) {
+          _controller.complete(controller);
+        }
+      },
     );
   }
 
@@ -426,18 +490,15 @@ class _StationListItem extends StatelessWidget {
 
   //Нижнее всплывающее окно
   void _showStationModal(BuildContext context, String chargePointId) {
-    final provider = this.provider;
-    final station = this.station;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _StationModal(
-        station: station,
-        chargePointId: chargePointId,
-        provider: provider,
+      builder: (context) => Consumer<StationProvider>(
+        builder: (context, provider, child) =>
+            _StationModal(chargePointId: chargePointId, provider: provider),
       ),
     );
   }
@@ -445,15 +506,10 @@ class _StationListItem extends StatelessWidget {
 
 // Модалка (Bottom sheet)
 class _StationModal extends StatefulWidget {
-  final Station station;
   final String chargePointId;
   final StationProvider provider;
 
-  const _StationModal({
-    required this.station,
-    required this.chargePointId,
-    required this.provider,
-  });
+  const _StationModal({required this.chargePointId, required this.provider});
 
   @override
   State<_StationModal> createState() => _StationModalState();
@@ -462,6 +518,13 @@ class _StationModal extends StatefulWidget {
 class _StationModalState extends State<_StationModal> {
   @override
   Widget build(BuildContext context) {
+    final station = widget.provider.stations.firstWhere(
+      (s) => s.id == widget.chargePointId,
+      orElse: () => Station.empty(),
+    );
+    if (station.id.isEmpty) {
+      return const Center(child: Text('Станция не найдена'));
+    }
     return FractionallySizedBox(
       heightFactor: 0.8,
       child: Column(
@@ -488,9 +551,7 @@ class _StationModalState extends State<_StationModal> {
               children: [
                 Expanded(
                   child: Text(
-                    widget.station.name.isNotEmpty
-                        ? widget.station.name
-                        : 'Неизвестно',
+                    station.name.isNotEmpty ? station.name : 'Неизвестно',
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -501,7 +562,7 @@ class _StationModalState extends State<_StationModal> {
                   children: [
                     Icon(Icons.star, color: Colors.yellow[700], size: 20),
                     const SizedBox(width: 4),
-                    Text((widget.station.rating).toString()),
+                    Text((station.rating).toString()),
                   ],
                 ),
               ],
@@ -517,7 +578,7 @@ class _StationModalState extends State<_StationModal> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    widget.station.address,
+                    station.address,
                     style: TextStyle(color: Colors.grey[700]),
                     overflow: TextOverflow.visible,
                   ),
@@ -533,15 +594,15 @@ class _StationModalState extends State<_StationModal> {
               spacing: 8,
               children: [
                 Chip(
-                  label: Text(widget.station.available),
+                  label: Text(station.available),
                   backgroundColor: Colors.green[100],
                 ),
                 Chip(
-                  label: Text(widget.station.distance),
+                  label: Text(station.distance),
                   backgroundColor: Colors.grey[200],
                 ),
                 Chip(
-                  label: Text(widget.station.time),
+                  label: Text(station.time),
                   backgroundColor: Colors.grey[200],
                 ),
               ],
@@ -557,7 +618,7 @@ class _StationModalState extends State<_StationModal> {
             ),
           ),
           // Доступные коннекторы
-          Expanded(child: _buildConnectorsList(context)),
+          Expanded(child: _buildConnectorsList(context, station)),
           // Кнопка маршрута
           Padding(
             padding: const EdgeInsets.all(16),
@@ -582,8 +643,8 @@ class _StationModalState extends State<_StationModal> {
   }
 
   //Доступные коннекторы
-  Widget _buildConnectorsList(BuildContext context) {
-    final connectors = widget.station.connectors;
+  Widget _buildConnectorsList(BuildContext context, Station station) {
+    final connectors = station.connectors;
     return ListView.builder(
       shrinkWrap: true,
       physics: const ClampingScrollPhysics(), // Плавная прокрутка
@@ -631,6 +692,7 @@ class _StationModalState extends State<_StationModal> {
                 context,
                 providerConnector,
                 connector,
+                station,
               ),
             ],
           ),
@@ -695,6 +757,7 @@ class _StationModalState extends State<_StationModal> {
     BuildContext context,
     Connector providerConnector,
     Connector connector,
+    Station station,
   ) {
     return ElevatedButton(
       onPressed: isOccupied
@@ -705,7 +768,7 @@ class _StationModalState extends State<_StationModal> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ChargingSessionScreen(
-                      station: widget.station,
+                      station: station,
                       connector: connector,
                       connectorIndex: connectorId,
                     ),

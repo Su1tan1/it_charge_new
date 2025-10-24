@@ -1,13 +1,13 @@
 class Config {
   // Значения будут подставляться через --dart-define при сборке/запуске.
-  // Пример: flutter run --dart-define=BASE_URL=https://api.example.com --dart-define=API_KEY=abcd
+  // Пример: flutter run --dart-define=BASE_URL=https://api.example.com --dart-define=API_KEY=test-mobile-key-123
   static const String baseUrl = String.fromEnvironment(
     'BASE_URL',
     defaultValue: 'http://176.88.248.139:8081',
   );
   static const String apiKey = String.fromEnvironment(
     'API_KEY',
-    defaultValue: '',
+    defaultValue: 'mobile-app-key-2025',
   );
   // Включить для тестирования: количество попыток retry
   static const int maxRetries = int.fromEnvironment(

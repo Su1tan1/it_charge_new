@@ -43,7 +43,6 @@ class CSMSClient {
     if (_connected) return;
 
     final endpoint = url ?? _determineEndpoint();
-    debugPrint('CSMSClient: Подключение к $endpoint');
 
     try {
       Map<String, String> headers = {};
@@ -53,13 +52,25 @@ class CSMSClient {
       _channel = WebSocketChannel.connect(Uri.parse(endpoint));
       _setupListener();
 
-      if (Config.apiKey.isNotEmpty) {
-        await request('auth', {'apiKey': Config.apiKey});
-      }
-
       _connected = true;
       _reconnectAttempts = 0;
       _connController.add(true);
+
+      if (Config.apiKey.isNotEmpty) {
+        try {
+          await request('auth', {
+            'apiKey': Config.apiKey,
+          }, const Duration(seconds: 10));
+          debugPrint('✅ WS auth успешна');
+        } catch (e) {
+          final errMsg = e.toString().length > 45
+              ? e.toString().substring(0, 45) + '...'
+              : e.toString();
+          debugPrint('⚠️ WS auth: $errMsg');
+        }
+      } else {
+        debugPrint('⚠️ API key пуст');
+      }
 
       _startHeartbeat();
 
@@ -80,11 +91,14 @@ class CSMSClient {
             }
           }
         } catch (e) {
-          debugPrint('CSMSClient: Ошибка повтора событий: $e');
+          debugPrint('⚠️ Event replay: ошибка');
         }
       }
     } catch (e) {
-      debugPrint('CSMSClient: Ошибка подключения: $e');
+      final errMsg = e.toString().length > 45
+          ? e.toString().substring(0, 45) + '...'
+          : e.toString();
+      debugPrint('❌ WS connect: $errMsg');
       _scheduleReconnect();
       rethrow;
     }
@@ -111,7 +125,6 @@ class CSMSClient {
           final data = raw is String
               ? json.decode(raw) as Map<String, dynamic>
               : (raw as Map<String, dynamic>);
-          // debugPrint('CSMSClient: Получено сообщение: $data'); // Убрано для уменьшения логов
 
           if (data.containsKey('event')) {
             _eventsController.add(data);
@@ -133,18 +146,19 @@ class CSMSClient {
               }
             }
           }
-        } catch (e, st) {
-          debugPrint('CSMSClient: Ошибка разбора сообщения: $e');
-          debugPrint('Стек вызовов: $st');
+        } catch (e) {
+          debugPrint('❌ WS parse: ошибка');
         }
       },
       onDone: () {
-        debugPrint('CSMSClient: Поток завершен - соединение закрыто сервером');
+        debugPrint('⚠️ WS stream closed');
         _handleDisconnect();
       },
       onError: (err, st) {
-        debugPrint('CSMSClient: Ошибка потока: $err');
-        debugPrint('Стек вызовов ошибки: $st');
+        final errMsg = err.toString().length > 50
+            ? err.toString().substring(0, 50) + '...'
+            : err.toString();
+        debugPrint('❌ WS stream: $errMsg');
         _handleDisconnect();
       },
       cancelOnError: true,
@@ -152,13 +166,13 @@ class CSMSClient {
   }
 
   void _handleDisconnect() {
-    debugPrint('CSMSClient: Соединение потеряно, попытка переподключения...');
+    debugPrint('⚠️ WS disconnected, reconnecting...');
     _connected = false;
     _stopHeartbeat();
 
     for (final entry in _pending.entries) {
       if (!entry.value.isCompleted) {
-        entry.value.completeError(Exception('Соединение потеряно'));
+        entry.value.completeError(Exception('Connection lost'));
       }
     }
     _pending.clear();
@@ -176,7 +190,10 @@ class CSMSClient {
       try {
         await connect();
       } catch (e) {
-        debugPrint('CSMSClient: Ошибка подключения при запросе: $e');
+        final errMsg = e.toString().length > 45
+            ? e.toString().substring(0, 45) + '...'
+            : e.toString();
+        debugPrint('❌ WS $action connect: $errMsg');
         rethrow;
       }
     }
@@ -187,27 +204,31 @@ class CSMSClient {
 
     final completer = Completer<Map<String, dynamic>>();
     _pending[id] = completer;
-    final out = json.encode(msg);
-    // debugPrint('CSMSClient OUT RAW: $out'); // Убрано для уменьшения логов
 
     try {
-      _channel!.sink.add(out);
+      _channel!.sink.add(json.encode(msg));
     } catch (e) {
       _pending.remove(id);
-      debugPrint('CSMSClient: Не удалось отправить сообщение: $e');
+      final errMsg = e.toString().length > 45
+          ? e.toString().substring(0, 45) + '...'
+          : e.toString();
+      debugPrint('❌ WS $action send: $errMsg');
       rethrow;
     }
 
     try {
       final res = await completer.future.timeout(timeout);
       if (res.containsKey('error')) {
-        throw Exception(res['error'].toString());
+        final error = res['error'];
+        throw Exception(error.toString());
       }
       final result = res['result'];
       if (result is Map<String, dynamic>) return result;
       return <String, dynamic>{'value': result};
     } catch (e) {
       _pending.remove(id);
+      final errMsg = e.toString();
+      debugPrint('❌ WS $action: $errMsg');
       rethrow;
     }
   }
@@ -225,7 +246,7 @@ class CSMSClient {
         }
       }
     } catch (e) {
-      debugPrint('CSMSClient: Ошибка подписки: $e');
+      debugPrint('⚠️ WS subscribe: $e');
       rethrow;
     }
   }
@@ -234,7 +255,7 @@ class CSMSClient {
     try {
       await request('unsubscribe', {'subscriptionId': subscriptionId});
     } catch (e) {
-      debugPrint('CSMSClient: Ошибка отписки: $e');
+      debugPrint('⚠️ WS unsubscribe: $e');
     }
   }
 
@@ -244,7 +265,7 @@ class CSMSClient {
       try {
         await request('ping', null, const Duration(seconds: 5));
       } catch (e) {
-        debugPrint('CSMSClient: Ошибка пинга Heartbeat: $e');
+        debugPrint('⚠️ WS heartbeat: ошибка');
         _handleDisconnect();
       }
     });
@@ -258,23 +279,17 @@ class CSMSClient {
   void _scheduleReconnect() {
     if (_reconnectAttempts >= _maxReconnectAttempts) {
       debugPrint(
-        'CSMSClient: Достигнуто максимальное количество попыток переподключения ($_maxReconnectAttempts)',
+        '❌ Макс. попыток переподключения ($_maxReconnectAttempts) достигнуто',
       );
       return;
     }
     _reconnectAttempts++;
     final delayMs = 500 * (1 << (_reconnectAttempts - 1));
-    debugPrint(
-      'CSMSClient: Планируется попытка переподключения $_reconnectAttempts через $delayMsмс',
-    );
     Future.delayed(Duration(milliseconds: delayMs), () async {
       try {
-        debugPrint('CSMSClient: Попытка переподключения...');
         await connect();
       } catch (e) {
-        debugPrint(
-          'CSMSClient: Попытка переподключения $_reconnectAttempts не удалась: $e',
-        );
+        debugPrint('⚠️ Переподключение $_reconnectAttempts: ошибка');
         _scheduleReconnect();
       }
     });
@@ -302,13 +317,8 @@ class CSMSClient {
     if (eid != null) _saveLastEventId(eid);
 
     if (data['event'] == 'session.expired') {
-      debugPrint('CSMSClient: Сессия истекла, попытка переподключения...');
+      debugPrint('⚠️ Сессия истекла, переподключение...');
       _channel?.sink.close(ws_status.goingAway);
-    }
-
-    if (data['event'] == 'connection.status') {
-      final status = data['data']?.toString();
-      debugPrint('CSMSClient: Событие статуса соединения: $status');
     }
 
     _eventsController.add(data);
@@ -316,12 +326,11 @@ class CSMSClient {
 
   void sendRaw(Map<String, dynamic> msg) {
     final out = json.encode(msg);
-    // debugPrint('CSMSClient RAW SEND: $out'); // Убрано для уменьшения логов
     _channel?.sink.add(out);
   }
 
   Future<void> close() async {
-    debugPrint('CSMSClient: Закрытие соединения...');
+    debugPrint('ℹ️ WS closing connection');
     _stopHeartbeat();
     _reconnectAttempts = 0;
 

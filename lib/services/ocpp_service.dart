@@ -11,32 +11,31 @@ class OcppService {
   static String get _baseUrl => Config.baseUrl;
   static String get _apiKey => Config.apiKey;
 
-  // Унифицированный метод для выполнения HTTP-запросов с ретраями и логами
+  // HTTP-запрос с ретраями
   static Future<http.Response> _httpRequest({
     required Future<http.Response> Function() requestFn,
     required String method,
     required String endpoint,
   }) async {
-    final uri = Uri.parse('$_baseUrl$endpoint');
-    debugPrint('Попытка $method-запроса по HTTP к: ${uri.toString()}');
     int attempts = 0;
     while (true) {
       attempts++;
       try {
         final res = await requestFn();
-        debugPrint(
-          '$method-запрос по HTTP к $endpoint успешен: статус ${res.statusCode}',
-        );
+        if (res.statusCode != 200) {
+          final errMsg = res.statusCode.toString();
+          debugPrint('⚠️ HTTP $method $endpoint: $errMsg');
+        }
         return res;
       } catch (e) {
-        debugPrint(
-          'Ошибка $method-запроса по HTTP к $endpoint (попытка $attempts): $e',
-        );
         if (attempts >= Config.maxRetries) {
+          final errMsg = e.toString().length > 40
+              ? e.toString().substring(0, 40) + '...'
+              : e.toString();
+          debugPrint('❌ $method $endpoint: $errMsg');
           rethrow;
         }
         final delayMs = Config.retryBaseDelayMs * (1 << (attempts - 1));
-        debugPrint('Повторная попытка через $delayMs мс');
         await Future.delayed(Duration(milliseconds: delayMs));
       }
     }
@@ -65,22 +64,8 @@ class OcppService {
     throw Exception('Неожиданная форма ответа');
   }
 
-  // Получение станций
-  static Future<List<Station>> fetchStations() async {
-    // Попытка WebSocket
-    try {
-      final ws = CSMSClient.instance;
-      debugPrint('Попытка подключения WebSocket...');
-      if (!ws.connected) await ws.connect();
-      debugPrint('WebSocket успешно подключен');
-      final resp = await ws.request('getStations');
-      debugPrint('Ответ от WebSocket для getStations: $resp');
-      return _parseListResponse<Station>(resp, Station.fromJson);
-    } catch (e) {
-      debugPrint('Ошибка WebSocket для fetchStations: $e. Переход к HTTP.');
-    }
-
-    // Фоллбек на HTTP с несколькими эндпоинтами
+  // Получение станций только через HTTP (для pull-to-refresh)
+  static Future<List<Station>> fetchStationsHTTPOnly() async {
     final endpoints = [
       '/api/user/stations',
       '/user/stations',
@@ -94,15 +79,12 @@ class OcppService {
     List<String> errors = [];
     for (final path in endpoints) {
       try {
-        final res = await _httpRequest(
-          method: 'GET',
-          endpoint: path,
-          requestFn: () => http
-              .get(Uri.parse('$_baseUrl$path'), headers: headers)
-              .timeout(const Duration(seconds: 10)),
-        );
+        final res = await http
+            .get(Uri.parse('$_baseUrl$path'), headers: headers)
+            .timeout(const Duration(seconds: 10));
+
         if (res.statusCode != 200) {
-          errors.add('[$path] HTTP ${res.statusCode}');
+          errors.add('[$path] ${res.statusCode}');
           continue;
         }
         final decoded = jsonDecode(res.body);
@@ -114,6 +96,23 @@ class OcppService {
     throw Exception('Все HTTP-эндпоинты провалились: ${errors.join('; ')}');
   }
 
+  // Получение станций
+  static Future<List<Station>> fetchStations() async {
+    // Попытка WebSocket
+    try {
+      final ws = CSMSClient.instance;
+      if (!ws.connected) await ws.connect();
+      final resp = await ws.request('getStations');
+      debugPrint('✅ WS getStations');
+      return _parseListResponse<Station>(resp, Station.fromJson);
+    } catch (e) {
+      debugPrint('⚠️ WS getStations → HTTP');
+    }
+
+    // Фоллбек на HTTP
+    return fetchStationsHTTPOnly();
+  }
+
   // Получение транзакций для станции
   static Future<List<Transaction>> getTransactionsForStation(
     String chargePointId,
@@ -121,19 +120,15 @@ class OcppService {
     // Попытка WebSocket
     try {
       final ws = CSMSClient.instance;
-      debugPrint('Попытка подключения WebSocket...');
       if (!ws.connected) await ws.connect();
-      debugPrint('WebSocket успешно подключен');
       final res = await ws.request('getRecentTransactions', {
         'limit': 50,
         'stationId': chargePointId,
       });
-      debugPrint('Ответ от WebSocket для getRecentTransactions: $res');
+      debugPrint('✅ WS getRecentTransactions');
       return _parseListResponse<Transaction>(res, Transaction.fromJson);
     } catch (e) {
-      debugPrint(
-        'Ошибка WebSocket для getTransactionsForStation: $e. Переход к HTTP.',
-      );
+      debugPrint('⚠️ WS getRecentTransactions → HTTP');
     }
 
     // Фоллбек на HTTP
@@ -147,7 +142,6 @@ class OcppService {
     final headers = <String, String>{'Accept': 'application/json'};
     if (_apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $_apiKey';
 
-    List<String> errors = [];
     for (final p in candidates) {
       try {
         final res = await _httpRequest(
@@ -157,17 +151,15 @@ class OcppService {
               .get(Uri.parse('$_baseUrl$p'), headers: headers)
               .timeout(const Duration(seconds: 10)),
         );
-        if (res.statusCode != 200) {
-          errors.add('[$p] HTTP ${res.statusCode}');
-          continue;
-        }
+        if (res.statusCode != 200) continue;
         final decoded = jsonDecode(res.body);
+        debugPrint('✅ HTTP getRecentTransactions');
         return _parseListResponse<Transaction>(decoded, Transaction.fromJson);
       } catch (e) {
-        errors.add('[$p] $e');
+        continue;
       }
     }
-    throw Exception('Все HTTP-эндпоинты провалились: ${errors.join('; ')}');
+    throw Exception('Все HTTP-эндпоинты провалились');
   }
 
   // Получение статуса коннектора
@@ -178,19 +170,15 @@ class OcppService {
     // Попытка WebSocket
     try {
       final ws = CSMSClient.instance;
-      debugPrint('Попытка подключения WebSocket...');
       if (!ws.connected) await ws.connect();
-      debugPrint('WebSocket успешно подключен');
       final res = await ws.request('getConnectorStatus', {
         'stationId': stationId,
         'connectorId': connectorId,
       });
-      debugPrint('Ответ от WebSocket для getConnectorStatus: $res');
+      debugPrint('✅ WS getConnectorStatus');
       return res;
     } catch (e) {
-      debugPrint(
-        'Ошибка WebSocket для getConnectorStatus: $e. Переход к HTTP.',
-      );
+      debugPrint('⚠️ WS getConnectorStatus → HTTP');
     }
 
     // Фоллбек на HTTP
@@ -207,6 +195,7 @@ class OcppService {
           .timeout(const Duration(seconds: 10)),
     );
     if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+    debugPrint('✅ HTTP getConnectorStatus');
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
@@ -221,18 +210,16 @@ class OcppService {
     // Попытка WebSocket
     try {
       final ws = CSMSClient.instance;
-      debugPrint('Попытка подключения WebSocket...');
       if (!ws.connected) await ws.connect();
-      debugPrint('WebSocket успешно подключен');
       final res = await ws.request('startCharging', {
         'stationId': stationId,
         'connectorId': connectorId,
         'idTag': idTag,
       });
-      debugPrint('Ответ от WebSocket для startCharging: $res');
+      debugPrint('✅ WS startCharging');
       return res;
     } catch (e) {
-      debugPrint('Ошибка WebSocket для userStartCharging: $e. Переход к HTTP.');
+      debugPrint('⚠️ WS startCharging → HTTP');
     }
 
     // Фоллбек на HTTP
@@ -248,7 +235,6 @@ class OcppService {
     };
     if (startValue != null) bodyMap['startValue'] = startValue;
     final body = jsonEncode(bodyMap);
-    debugPrint('Тело запроса для startCharging: $body');
 
     final res = await _httpRequest(
       method: 'POST',
@@ -260,6 +246,7 @@ class OcppService {
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception('HTTP ${res.statusCode}');
     }
+    debugPrint('✅ startCharging через HTTP');
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
@@ -269,42 +256,34 @@ class OcppService {
     String? chargePointId,
     int? connectorId,
   }) async {
+    final stationId =
+        chargePointId; // chargePointId is actually stationId from the backend
+
     // Попытка WebSocket
     try {
       final ws = CSMSClient.instance;
-      debugPrint('Попытка подключения WebSocket...');
       if (!ws.connected) await ws.connect();
-      debugPrint('WebSocket успешно подключен');
       final res = await ws.request('stopCharging', {
         'transactionId': transactionId,
-        'chargePointId': chargePointId,
+        'stationId': stationId,
         'connectorId': connectorId,
       });
-      debugPrint('Ответ от WebSocket для stopCharging: $res');
+      debugPrint('✅ WS stopCharging');
       return res;
     } catch (e) {
-      debugPrint('Ошибка WebSocket для userStopCharging: $e. Переход к HTTP.');
+      debugPrint('⚠️ WS stopCharging → HTTP');
     }
 
     // Фоллбек на HTTP с несколькими эндпоинтами
-    final candidates = [
-      '/api/transactions/stop',
-      '/api/stations/stop',
-      '/api/stations/${Uri.encodeComponent(transactionId)}/stop',
-      '/api/user/stop',
-      '/api/user/transactions/stop',
-      '/api/admin/remote-stop-session',
-    ];
+    final candidates = ['/api/admin/remote-stop-session'];
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $_apiKey';
 
     final bodyMap = <String, dynamic>{'transactionId': transactionId};
-    if (chargePointId != null) bodyMap['chargePointId'] = chargePointId;
+    if (stationId != null) bodyMap['stationId'] = stationId;
     if (connectorId != null) bodyMap['connectorId'] = connectorId;
     final body = jsonEncode(bodyMap);
-    debugPrint('Тело запроса для stopCharging: $body');
 
-    List<String> errors = [];
     for (final p in candidates) {
       try {
         final res = await _httpRequest(
@@ -314,16 +293,14 @@ class OcppService {
               .post(Uri.parse('$_baseUrl$p'), headers: headers, body: body)
               .timeout(const Duration(seconds: 10)),
         );
-        if (res.statusCode != 200 && res.statusCode != 201) {
-          errors.add('[$p] HTTP ${res.statusCode}');
-          continue;
-        }
+        if (res.statusCode != 200 && res.statusCode != 201) continue;
+        debugPrint('✅ HTTP stopCharging');
         return jsonDecode(res.body) as Map<String, dynamic>;
       } catch (e) {
-        errors.add('[$p] $e');
+        continue;
       }
     }
-    throw Exception('Все HTTP-эндпоинты провалились: ${errors.join('; ')}');
+    throw Exception('Все HTTP-эндпоинты провалились');
   }
 
   // Получение сессий (только HTTP, без WS)

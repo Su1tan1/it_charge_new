@@ -17,9 +17,8 @@ void main() async {
   await messaging.requestPermission(alert: true, badge: true, sound: true);
   runApp(
     ChangeNotifierProvider(
-      // Disable automatic HTTP auto-start/polling here. Stations will be
-      // loaded only by manual pull-to-refresh in the UI.
-      create: (context) => StationProvider(autoStart: false),
+      // Enable automatic fetch when app starts (single load, no polling)
+      create: (context) => StationProvider(autoStart: true),
       child: const WebSocketInitializer(
         child: MyApp(),
       ), // Wrap MyApp with WebSocketInitializer
@@ -86,28 +85,16 @@ class _WebSocketInitializerState extends State<WebSocketInitializer>
     super.didChangeAppLifecycleState(state);
     switch (state) {
       case AppLifecycleState.resumed:
-        // App is visible and running
-        debugPrint('App resumed - ensuring WebSocket connection');
         if (!CSMSClient.instance.connected) {
           _initWebSocket();
         }
         break;
       case AppLifecycleState.paused:
-        // App is not visible
-        debugPrint('App paused - WebSocket will maintain connection');
-        break;
       case AppLifecycleState.detached:
-        // App is being terminated
-        debugPrint('App detached - closing WebSocket');
         CSMSClient.instance.close();
         break;
       case AppLifecycleState.inactive:
-        // App is inactive
-        debugPrint('App inactive');
-        break;
       case AppLifecycleState.hidden:
-        // App is hidden (iOS specific)
-        debugPrint('App hidden');
         break;
     }
   }
@@ -116,7 +103,6 @@ class _WebSocketInitializerState extends State<WebSocketInitializer>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     CSMSClient.instance.close();
-    debugPrint('WebSocket closed in main.dart');
     super.dispose();
   }
 

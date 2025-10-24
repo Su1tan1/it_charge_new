@@ -11,12 +11,12 @@ class StationProvider extends ChangeNotifier {
   String? errorMessage;
   Timer? _pollingTimer;
 
-  /// Создаёт провайдера. Если [autoStart] == true — сразу сделает initial fetch и запустит polling.
+  /// Создаёт провайдера. Если [autoStart] == true — сразу сделает initial fetch (без polling).
   StationProvider({bool autoStart = false}) {
     if (autoStart) {
       fetchStations();
     }
-    // subscribe to CSMS events
+    // Слушаем изменения статуса коннекторов
     CSMSClient.instance.events.listen((ev) {
       try {
         final eventName = ev['event']?.toString() ?? '';
@@ -26,7 +26,6 @@ class StationProvider extends ChangeNotifier {
           final connectorId =
               int.tryParse(d['connectorId']?.toString() ?? '') ?? 0;
           final status = d['status']?.toString() ?? '';
-          // Map status to color
           final color = status == 'Available' ? Colors.green : Colors.orange;
           updateConnectorStatus(
             stationId,
@@ -37,12 +36,8 @@ class StationProvider extends ChangeNotifier {
           );
         }
       } catch (e) {
-        debugPrint('StationProvider event handling error: $e');
+        debugPrint('⚠️ Event error: $e');
       }
-    });
-    CSMSClient.instance.onConnectionChanged.listen((connected) {
-      debugPrint('WebSocket connection changed: $connected');
-      // We intentionally avoid calling fetchStations() or start/stop polling.
     });
   }
 
@@ -72,8 +67,7 @@ class StationProvider extends ChangeNotifier {
       }
     } catch (e) {
       errorMessage = 'Ошибка: $e';
-      // Дополнительный лог для отладки — покажет в консоли причину ошибки
-      debugPrint('fetchStations error: $e');
+      debugPrint('❌ fetchStations: $e');
     } finally {
       isLoading = false;
       notifyListeners();
@@ -83,6 +77,73 @@ class StationProvider extends ChangeNotifier {
   /// Pull-to-refresh helper for UI
   Future<void> refresh() async {
     await fetchStations();
+  }
+
+  /// Попробовать загрузить станции через WebSocket, с fallback на HTTP
+  Future<void> fetchStationsWithWebSocket() async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    debugPrint('StationProvider: Начало загрузки станций через WebSocket');
+
+    try {
+      // Попытка WebSocket если подключен
+      if (CSMSClient.instance.connected) {
+        try {
+          final resp = await CSMSClient.instance
+              .request('getStations', null, const Duration(seconds: 3))
+              .timeout(const Duration(seconds: 5));
+
+          // Парсим список станций
+          List<Station> wsStations = [];
+          if (resp['stations'] is List) {
+            wsStations = (resp['stations'] as List)
+                .map((e) => Station.fromJson(e as Map<String, dynamic>))
+                .toList();
+          } else if (resp.values.isNotEmpty && resp.values.first is List) {
+            wsStations = (resp.values.first as List)
+                .map((e) => Station.fromJson(e as Map<String, dynamic>))
+                .toList();
+          }
+
+          if (wsStations.isNotEmpty) {
+            stations = wsStations;
+            final prefs = await SharedPreferences.getInstance();
+            final favorites = prefs.getStringList('favorites') ?? [];
+            for (var station in stations) {
+              station.favorite = favorites.contains(station.id);
+            }
+            debugPrint('✅ WS: ${stations.length} станций');
+            return; // Успешно через WebSocket
+          }
+        } on TimeoutException {
+          debugPrint('⏱️ WS timeout → HTTP');
+        } catch (e) {
+          final errMsg = e.toString().length > 50
+              ? e.toString().substring(0, 50) + '...'
+              : e.toString();
+          debugPrint('⚠️ WS: $errMsg → HTTP');
+        }
+      }
+
+      // Fallback на HTTP
+      final stationsList = await OcppService.fetchStationsHTTPOnly();
+      stations = stationsList;
+      debugPrint('✅ HTTP: ${stations.length} станций');
+
+      final prefs = await SharedPreferences.getInstance();
+      final favorites = prefs.getStringList('favorites') ?? [];
+      for (var station in stations) {
+        station.favorite = favorites.contains(station.id);
+      }
+    } catch (e) {
+      errorMessage = 'Ошибка: $e';
+      debugPrint('❌ fetchStationsWithWebSocket: $e');
+      rethrow;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> toggleFavorite(String chargePointId) async {

@@ -11,6 +11,8 @@ class Station {
   List<Color> status; // made mutable
   bool favorite; // Не final для SharedPreferences
   final List<Connector> connectors;
+  final double? lat;
+  final double? lng;
 
   Station({
     required this.id,
@@ -23,6 +25,8 @@ class Station {
     required this.status,
     required this.favorite,
     required this.connectors,
+    this.lat,
+    this.lng,
   });
 
   /// Пустая/заглушечная станция для orElse
@@ -69,6 +73,13 @@ class Station {
         ? (location['address']?.toString() ?? '')
         : (json['address']?.toString() ?? '');
 
+    final lat = location != null
+        ? (location['lat'] as num?)?.toDouble()
+        : (json['lat'] as num?)?.toDouble();
+    final lng = location != null
+        ? (location['lng'] as num?)?.toDouble()
+        : (json['lng'] as num?)?.toDouble();
+
     return Station(
       id:
           json['stationId']?.toString() ??
@@ -85,6 +96,8 @@ class Station {
       status: statusColors,
       favorite: json['favorite'] as bool? ?? false,
       connectors: connectors,
+      lat: lat,
+      lng: lng,
     );
   }
 
@@ -100,6 +113,8 @@ class Station {
     'status': status,
     'favorite': favorite,
     'connectors': connectors.map((c) => c.toJson()).toList(),
+    'lat': lat,
+    'lng': lng,
   };
 }
 
