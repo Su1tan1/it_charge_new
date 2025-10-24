@@ -15,7 +15,6 @@ class StationProvider extends ChangeNotifier {
   StationProvider({bool autoStart = false}) {
     if (autoStart) {
       fetchStations();
-      startPolling();
     }
     // subscribe to CSMS events
     CSMSClient.instance.events.listen((ev) {
@@ -42,7 +41,8 @@ class StationProvider extends ChangeNotifier {
       }
     });
     CSMSClient.instance.onConnectionChanged.listen((connected) {
-      if (connected) fetchStations();
+      debugPrint('WebSocket connection changed: $connected');
+      // We intentionally avoid calling fetchStations() or start/stop polling.
     });
   }
 

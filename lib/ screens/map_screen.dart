@@ -121,7 +121,27 @@ class _MapScreenState extends State<MapScreen> {
                                 ),
                               ],
                             )
-                          : _buildListScreen(context, provider),
+                          : (provider.stations.isEmpty
+                                ? ListView(
+                                    physics:
+                                        const AlwaysScrollableScrollPhysics(),
+                                    children: [
+                                      SizedBox(
+                                        height:
+                                            MediaQuery.of(context).size.height *
+                                            0.6,
+                                        child: const Center(
+                                          child: Text(
+                                            'Станции не найдены',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : _buildListScreen(context, provider)),
                     );
                   },
                 ),
@@ -184,7 +204,7 @@ class _MapScreenState extends State<MapScreen> {
   //Список станций
   Widget _buildListScreen(BuildContext context, StationProvider provider) {
     final stations = provider.stations;
-    debugPrint(provider.isLoading.toString());
+    // debugPrint(provider.isLoading.toString());
     if (provider.isLoading) {
       // Should not reach here when wrapped by RefreshIndicator (we handle loading above)
       return const Center(child: CircularProgressIndicator());

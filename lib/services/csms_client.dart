@@ -43,7 +43,7 @@ class CSMSClient {
     if (_connected) return;
 
     final endpoint = url ?? _determineEndpoint();
-    debugPrint('CSMSClient: connecting to $endpoint');
+    debugPrint('CSMSClient: Подключение к $endpoint');
 
     try {
       Map<String, String> headers = {};
@@ -53,7 +53,6 @@ class CSMSClient {
       _channel = WebSocketChannel.connect(Uri.parse(endpoint));
       _setupListener();
 
-      // send auth
       if (Config.apiKey.isNotEmpty) {
         await request('auth', {'apiKey': Config.apiKey});
       }
@@ -62,10 +61,8 @@ class CSMSClient {
       _reconnectAttempts = 0;
       _connController.add(true);
 
-      // start heartbeat
       _startHeartbeat();
 
-      // event replay
       await _loadLastEventId();
       if (_lastEventId != null) {
         try {
@@ -83,11 +80,11 @@ class CSMSClient {
             }
           }
         } catch (e) {
-          debugPrint('CSMSClient: event replay failed: $e');
+          debugPrint('CSMSClient: Ошибка повтора событий: $e');
         }
       }
     } catch (e) {
-      debugPrint('CSMSClient connect error: $e');
+      debugPrint('CSMSClient: Ошибка подключения: $e');
       _scheduleReconnect();
       rethrow;
     }
@@ -102,7 +99,6 @@ class CSMSClient {
       }
       return '${Config.baseUrl}/mobile-client';
     }
-    // default provided by backend
     return 'ws://193.29.139.202:8081/mobile-client';
   }
 
@@ -115,9 +111,12 @@ class CSMSClient {
           final data = raw is String
               ? json.decode(raw) as Map<String, dynamic>
               : (raw as Map<String, dynamic>);
+          // debugPrint('CSMSClient: Получено сообщение: $data'); // Убрано для уменьшения логов
+
           if (data.containsKey('event')) {
-            // push event
             _eventsController.add(data);
+            final eid = data['eventId']?.toString();
+            if (eid != null) _saveLastEventId(eid);
           } else if (data.containsKey('id') &&
               (data.containsKey('result') || data.containsKey('error'))) {
             final id = data['id']?.toString() ?? '';
@@ -126,7 +125,6 @@ class CSMSClient {
               completer.complete(data);
             }
           } else {
-            // generic messages: try to route
             if (data.containsKey('result')) {
               final id = data['id']?.toString();
               if (id != null && _pending.containsKey(id)) {
@@ -136,17 +134,17 @@ class CSMSClient {
             }
           }
         } catch (e, st) {
-          debugPrint('CSMSClient: parse message error: $e');
-          debugPrint(st.toString());
+          debugPrint('CSMSClient: Ошибка разбора сообщения: $e');
+          debugPrint('Стек вызовов: $st');
         }
       },
       onDone: () {
-        debugPrint('CSMSClient: stream done');
+        debugPrint('CSMSClient: Поток завершен - соединение закрыто сервером');
         _handleDisconnect();
       },
       onError: (err, st) {
-        debugPrint('CSMSClient: stream error $err');
-        debugPrint(st.toString());
+        debugPrint('CSMSClient: Ошибка потока: $err');
+        debugPrint('Стек вызовов ошибки: $st');
         _handleDisconnect();
       },
       cancelOnError: true,
@@ -154,15 +152,18 @@ class CSMSClient {
   }
 
   void _handleDisconnect() {
+    debugPrint('CSMSClient: Соединение потеряно, попытка переподключения...');
     _connected = false;
-    try {
-      _connController.add(false);
-    } catch (_) {}
     _stopHeartbeat();
-    for (final c in _pending.values) {
-      if (!c.isCompleted) c.completeError(Exception('Disconnected'));
+
+    for (final entry in _pending.entries) {
+      if (!entry.value.isCompleted) {
+        entry.value.completeError(Exception('Соединение потеряно'));
+      }
     }
     _pending.clear();
+
+    _connController.add(false);
     _scheduleReconnect();
   }
 
@@ -175,7 +176,7 @@ class CSMSClient {
       try {
         await connect();
       } catch (e) {
-        debugPrint('CSMSClient: connect in request failed: $e');
+        debugPrint('CSMSClient: Ошибка подключения при запросе: $e');
         rethrow;
       }
     }
@@ -187,27 +188,33 @@ class CSMSClient {
     final completer = Completer<Map<String, dynamic>>();
     _pending[id] = completer;
     final out = json.encode(msg);
-    debugPrint('CSMSClient OUT RAW: $out');
+    // debugPrint('CSMSClient OUT RAW: $out'); // Убрано для уменьшения логов
+
     try {
       _channel!.sink.add(out);
     } catch (e) {
       _pending.remove(id);
+      debugPrint('CSMSClient: Не удалось отправить сообщение: $e');
       rethrow;
     }
 
-    final res = await completer.future.timeout(timeout);
-    if (res.containsKey('error')) {
-      throw Exception(res['error'].toString());
+    try {
+      final res = await completer.future.timeout(timeout);
+      if (res.containsKey('error')) {
+        throw Exception(res['error'].toString());
+      }
+      final result = res['result'];
+      if (result is Map<String, dynamic>) return result;
+      return <String, dynamic>{'value': result};
+    } catch (e) {
+      _pending.remove(id);
+      rethrow;
     }
-    final result = res['result'];
-    if (result is Map<String, dynamic>) return result;
-    return <String, dynamic>{'value': result};
   }
 
   Future<void> subscribe(Map<String, dynamic> params) async {
     try {
       final res = await request('subscribe', params);
-      // backend may return snapshot, handle if present
       if (res['snapshot'] is Map) {
         final snap = res['snapshot'] as Map<String, dynamic>;
         if (snap['stations'] is List) {
@@ -218,7 +225,7 @@ class CSMSClient {
         }
       }
     } catch (e) {
-      debugPrint('CSMSClient subscribe failed: $e');
+      debugPrint('CSMSClient: Ошибка подписки: $e');
       rethrow;
     }
   }
@@ -227,7 +234,7 @@ class CSMSClient {
     try {
       await request('unsubscribe', {'subscriptionId': subscriptionId});
     } catch (e) {
-      debugPrint('CSMSClient unsubscribe failed: $e');
+      debugPrint('CSMSClient: Ошибка отписки: $e');
     }
   }
 
@@ -237,11 +244,8 @@ class CSMSClient {
       try {
         await request('ping', null, const Duration(seconds: 5));
       } catch (e) {
-        debugPrint('CSMSClient heartbeat ping failed: $e');
-        // trigger reconnect
-        try {
-          _channel?.sink.close(ws_status.goingAway);
-        } catch (_) {}
+        debugPrint('CSMSClient: Ошибка пинга Heartbeat: $e');
+        _handleDisconnect();
       }
     });
   }
@@ -252,15 +256,25 @@ class CSMSClient {
   }
 
   void _scheduleReconnect() {
-    if (_reconnectAttempts >= _maxReconnectAttempts) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint(
+        'CSMSClient: Достигнуто максимальное количество попыток переподключения ($_maxReconnectAttempts)',
+      );
+      return;
+    }
     _reconnectAttempts++;
     final delayMs = 500 * (1 << (_reconnectAttempts - 1));
-    debugPrint('CSMSClient scheduling reconnect in ${delayMs}ms');
+    debugPrint(
+      'CSMSClient: Планируется попытка переподключения $_reconnectAttempts через $delayMsмс',
+    );
     Future.delayed(Duration(milliseconds: delayMs), () async {
       try {
+        debugPrint('CSMSClient: Попытка переподключения...');
         await connect();
       } catch (e) {
-        debugPrint('CSMSClient reconnect attempt failed: $e');
+        debugPrint(
+          'CSMSClient: Попытка переподключения $_reconnectAttempts не удалась: $e',
+        );
         _scheduleReconnect();
       }
     });
@@ -284,29 +298,54 @@ class CSMSClient {
   }
 
   void _processIncomingEvent(Map<String, dynamic> data) {
-    // store lastEventId if present
     final eid = data['eventId']?.toString();
     if (eid != null) _saveLastEventId(eid);
+
+    if (data['event'] == 'session.expired') {
+      debugPrint('CSMSClient: Сессия истекла, попытка переподключения...');
+      _channel?.sink.close(ws_status.goingAway);
+    }
+
+    if (data['event'] == 'connection.status') {
+      final status = data['data']?.toString();
+      debugPrint('CSMSClient: Событие статуса соединения: $status');
+    }
+
     _eventsController.add(data);
   }
 
   void sendRaw(Map<String, dynamic> msg) {
     final out = json.encode(msg);
-    debugPrint('CSMSClient RAW SEND: $out');
+    // debugPrint('CSMSClient RAW SEND: $out'); // Убрано для уменьшения логов
     _channel?.sink.add(out);
   }
 
   Future<void> close() async {
+    debugPrint('CSMSClient: Закрытие соединения...');
+    _stopHeartbeat();
+    _reconnectAttempts = 0;
+
     try {
       _channel?.sink.close(ws_status.normalClosure);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('CSMSClient: Ошибка при закрытии канала: $e');
+    }
+
     _channel = null;
     _connected = false;
+
     try {
       if (!_eventsController.isClosed) await _eventsController.close();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('CSMSClient: Ошибка при закрытии контроллера событий: $e');
+    }
+
     try {
       if (!_connController.isClosed) await _connController.close();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('CSMSClient: Ошибка при закрытии контроллера соединения: $e');
+    }
+
+    debugPrint('CSMSClient: Соединение закрыто');
   }
 }
