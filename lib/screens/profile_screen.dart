@@ -37,7 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF090909),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 80, top: 16),
+        padding: const EdgeInsets.only(bottom: 20, top: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -86,7 +86,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: _buildOtherSection(),
             ),
-            // const SizedBox(height: 24),
           ],
         ),
       ),
@@ -390,60 +389,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-
-  // Widget _buildBottomNav() {
-  //   return Container(
-  //     height: 72,
-  //     decoration: BoxDecoration(
-  //       color: Colors.black,
-  //       boxShadow: [
-  //         BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 10),
-  //       ],
-  //     ),
-  //     // child: Row(
-  //     //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  //     //   children: [
-  //     //     Column(
-  //     //       mainAxisSize: MainAxisSize.min,
-  //     //       children: [
-  //     //         Icon(Icons.place, color: Colors.grey),
-  //     //         const SizedBox(height: 4),
-  //     //         Text('Карта', style: TextStyle(color: Colors.grey, fontSize: 12)),
-  //     //       ],
-  //     //     ),
-  //     //     Column(
-  //     //       mainAxisSize: MainAxisSize.min,
-  //     //       children: [
-  //     //         Icon(Icons.history, color: Colors.grey),
-  //     //         const SizedBox(height: 4),
-  //     //         Text(
-  //     //           'История',
-  //     //           style: TextStyle(color: Colors.grey, fontSize: 12),
-  //     //         ),
-  //     //       ],
-  //     //     ),
-  //     //     Container(
-  //     //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-  //     //       decoration: BoxDecoration(
-  //     //         gradient: const LinearGradient(
-  //     //           colors: [Color(0xFF00C6A7), Color(0xFF70E000)],
-  //     //         ),
-  //     //         borderRadius: BorderRadius.circular(16),
-  //     //       ),
-  //     //       child: Column(
-  //     //         mainAxisSize: MainAxisSize.min,
-  //     //         children: [
-  //     //           const Icon(Icons.person, color: Colors.white),
-  //     //           const SizedBox(height: 4),
-  //     //           const Text(
-  //     //             'Профиль',
-  //     //             style: TextStyle(color: Colors.white, fontSize: 12),
-  //     //           ),
-  //     //         ],
-  //     //       ),
-  //     //     ),
-  //     //   ],
-  //     // ),
-  //   );
-  // }
 }

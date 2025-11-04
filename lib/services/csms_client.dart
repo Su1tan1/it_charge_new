@@ -19,9 +19,11 @@ class CSMSClient {
 
   // heartbeat & reconnect
   Timer? _heartbeatTimer;
+  Timer? _reconnectTimer; // Таймер для переподключения
   final Duration _heartbeatInterval = const Duration(seconds: 20);
   int _reconnectAttempts = 0;
-  final int _maxReconnectAttempts = 12;
+  final int _maxReconnectAttempts = 3; // Максимум 3 попытки
+  bool _reconnectEnabled = false; // По умолчанию отключено
 
   // last event id for replay
   String? _lastEventId;
@@ -64,7 +66,7 @@ class CSMSClient {
           debugPrint('✅ WS auth успешна');
         } catch (e) {
           final errMsg = e.toString().length > 45
-              ? e.toString().substring(0, 45) + '...'
+              ? '${e.toString().substring(0, 45)}...'
               : e.toString();
           debugPrint('⚠️ WS auth: $errMsg');
         }
@@ -96,7 +98,7 @@ class CSMSClient {
       }
     } catch (e) {
       final errMsg = e.toString().length > 45
-          ? e.toString().substring(0, 45) + '...'
+          ? '${e.toString().substring(0, 45)}...'
           : e.toString();
       debugPrint('❌ WS connect: $errMsg');
       _scheduleReconnect();
@@ -105,15 +107,8 @@ class CSMSClient {
   }
 
   String _determineEndpoint() {
-    if (Config.baseUrl.isNotEmpty &&
-        (Config.baseUrl.startsWith('ws') ||
-            Config.baseUrl.startsWith('http'))) {
-      if (Config.baseUrl.startsWith('http')) {
-        return '${Config.baseUrl.replaceFirst('http', 'ws')}/mobile-client';
-      }
-      return '${Config.baseUrl}/mobile-client';
-    }
-    return 'ws://193.29.139.202:8081/mobile-client';
+    // Новый WebSocket URL через Nginx /mobile
+    return Config.wsUrl;
   }
 
   void _setupListener() {
@@ -156,7 +151,7 @@ class CSMSClient {
       },
       onError: (err, st) {
         final errMsg = err.toString().length > 50
-            ? err.toString().substring(0, 50) + '...'
+            ? '${err.toString().substring(0, 50)}...'
             : err.toString();
         debugPrint('❌ WS stream: $errMsg');
         _handleDisconnect();
@@ -166,7 +161,9 @@ class CSMSClient {
   }
 
   void _handleDisconnect() {
-    debugPrint('⚠️ WS disconnected, reconnecting...');
+    if (!_connected) return; // Уже отключены, не вызываем переподключение
+
+    debugPrint('⚠️ WS отключён');
     _connected = false;
     _stopHeartbeat();
 
@@ -178,7 +175,9 @@ class CSMSClient {
     _pending.clear();
 
     _connController.add(false);
-    _scheduleReconnect();
+
+    // Переподключение НЕ запускается автоматически
+    // Используйте enableReconnect() для включения автопереподключения
   }
 
   Future<Map<String, dynamic>> request(
@@ -191,7 +190,7 @@ class CSMSClient {
         await connect();
       } catch (e) {
         final errMsg = e.toString().length > 45
-            ? e.toString().substring(0, 45) + '...'
+            ? '${e.toString().substring(0, 45)}...'
             : e.toString();
         debugPrint('❌ WS $action connect: $errMsg');
         rethrow;
@@ -210,7 +209,7 @@ class CSMSClient {
     } catch (e) {
       _pending.remove(id);
       final errMsg = e.toString().length > 45
-          ? e.toString().substring(0, 45) + '...'
+          ? '${e.toString().substring(0, 45)}...'
           : e.toString();
       debugPrint('❌ WS $action send: $errMsg');
       rethrow;
@@ -277,22 +276,55 @@ class CSMSClient {
   }
 
   void _scheduleReconnect() {
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      debugPrint(
-        '❌ Макс. попыток переподключения ($_maxReconnectAttempts) достигнуто',
-      );
+    if (!_reconnectEnabled) {
+      debugPrint('⚠️ Автопереподключение отключено');
       return;
     }
+
+    if (_reconnectAttempts >= _maxReconnectAttempts) {
+      debugPrint(
+        '❌ Макс. попыток переподключения ($_maxReconnectAttempts) достигнуто. Остановка.',
+      );
+      _reconnectEnabled = false;
+      _stopReconnect();
+      return;
+    }
+
     _reconnectAttempts++;
-    final delayMs = 500 * (1 << (_reconnectAttempts - 1));
-    Future.delayed(Duration(milliseconds: delayMs), () async {
+    final delayMs = 3000 * _reconnectAttempts; // 3s, 6s, 9s
+
+    debugPrint(
+      '⏳ Попытка переподключения $_reconnectAttempts через ${delayMs}ms',
+    );
+
+    _reconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
+      if (!_reconnectEnabled) return;
+
       try {
         await connect();
+        debugPrint('✅ Переподключение успешно');
       } catch (e) {
         debugPrint('⚠️ Переподключение $_reconnectAttempts: ошибка');
         _scheduleReconnect();
       }
     });
+  }
+
+  void _stopReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  /// Включить автоматическое переподключение
+  void enableReconnect() {
+    _reconnectEnabled = true;
+    _reconnectAttempts = 0;
+  }
+
+  /// Отключить автоматическое переподключение
+  void disableReconnect() {
+    _reconnectEnabled = false;
+    _stopReconnect();
   }
 
   Future<void> _saveLastEventId(String id) async {
@@ -331,6 +363,8 @@ class CSMSClient {
 
   Future<void> close() async {
     debugPrint('ℹ️ WS closing connection');
+    _reconnectEnabled = false; // Отключаем автопереподключение
+    _stopReconnect();
     _stopHeartbeat();
     _reconnectAttempts = 0;
 

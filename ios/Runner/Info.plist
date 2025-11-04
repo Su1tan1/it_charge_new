@@ -57,5 +57,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Приложению нужен доступ к вашему местоположению для отображения ближайших зарядных станций</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Приложению нужен доступ к вашему местоположению для отображения ближайших зарядных станций</string>
 </dict>
 </plist>

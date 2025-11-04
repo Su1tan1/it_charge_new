@@ -3,7 +3,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import '../providers/station_provider.dart';
 import '../models/station_model.dart';
 import 'charging_session_screen.dart';
@@ -17,9 +19,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   bool _isMapMode = true;
-
-  final Completer<GoogleMapController> _controller =
-      Completer<GoogleMapController>();
+  final MapController _mapController = MapController();
+  LatLng? _currentLocation; // Текущее местоположение пользователя
+  bool _isLoadingLocation = false;
 
   // Константы для стилей
   static const EdgeInsets _searchPadding = EdgeInsets.symmetric(
@@ -50,62 +52,318 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
+
+  /// Получить текущее местоположение пользователя
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLoadingLocation = true);
+
+    try {
+      // Проверка разрешений
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          debugPrint('⚠️ Разрешение на геолокацию отклонено');
+          setState(() => _isLoadingLocation = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        debugPrint('⚠️ Разрешение на геолокацию отклонено навсегда');
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      // Получение текущей позиции
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      );
+
+      setState(() {
+        _currentLocation = LatLng(position.latitude, position.longitude);
+        _isLoadingLocation = false;
+      });
+
+      debugPrint(
+        '✅ Местоположение: ${position.latitude}, ${position.longitude}',
+      );
+    } catch (e) {
+      debugPrint('❌ Ошибка получения местоположения: $e');
+      setState(() => _isLoadingLocation = false);
+    }
+  }
+
+  /// Переместить карту к текущему местоположению
+  void _moveToCurrentLocation() {
+    if (_currentLocation != null) {
+      _mapController.move(_currentLocation!, 15.0);
+    } else {
+      _getCurrentLocation().then((_) {
+        if (_currentLocation != null) {
+          _mapController.move(_currentLocation!, 15.0);
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Панель поиска
-        Container(
-          padding: _searchPadding,
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Поиск станций...',
-              hintStyle: TextStyle(color: Colors.grey[600]),
-              prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-              suffixIcon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 10),
-            ),
-            style: const TextStyle(fontSize: 16),
-          ),
-        ),
-        const SizedBox(height: 10),
-        // Кнопки переключения карта/список
-        Padding(
-          padding: _togglePadding,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return _isMapMode
+        ? Consumer<StationProvider>(
+            builder: (context, provider, child) {
+              return Stack(
+                children: [
+                  _buildMapView(context, provider),
+                  // Панель поиска поверх карты
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    right: 8,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Поиск станций...',
+                          hintStyle: TextStyle(color: Colors.grey[600]),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: Colors.grey[600],
+                          ),
+                          suffixIcon: Icon(
+                            Icons.arrow_drop_down,
+                            color: Colors.grey[600],
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                          ),
+                        ),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                  // Кнопки переключения карта/список поверх карты
+                  Positioned(
+                    top: 72,
+                    left: 8,
+                    right: 8,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildToggleButton(
+                            'Карта',
+                            _isMapMode,
+                            () => _setMode(true),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildToggleButton(
+                            'Список',
+                            !_isMapMode,
+                            () => _setMode(false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Кнопки статистики внизу
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 16,
+                    child: _buildBottomButtons(),
+                  ),
+                  // Кнопка "Моё местоположение" справа снизу над кнопками статистики
+                  Positioned(
+                    right: 16,
+                    bottom: 90,
+                    child: FloatingActionButton(
+                      mini: true,
+                      backgroundColor: Colors.white,
+                      onPressed: _moveToCurrentLocation,
+                      child: _isLoadingLocation
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              Icons.my_location,
+                              color: _currentLocation != null
+                                  ? const Color(0xFF00C6A7)
+                                  : Colors.grey,
+                            ),
+                    ),
+                  ),
+                  // Кнопки масштабирования справа по центру
+                  Positioned(
+                    right: 16,
+                    top: MediaQuery.of(context).size.height * 0.4,
+                    child: Column(
+                      children: [
+                        // Кнопка "+"
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                final currentZoom = _mapController.camera.zoom;
+                                _mapController.move(
+                                  _mapController.camera.center,
+                                  currentZoom + 1,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: const SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Icon(
+                                  Icons.add,
+                                  color: Color(0xFF00C6A7),
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Разделитель
+                        Container(
+                          width: 44,
+                          height: 1,
+                          color: Colors.grey.withOpacity(0.3),
+                        ),
+                        const SizedBox(height: 8),
+                        // Кнопка "-"
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                final currentZoom = _mapController.camera.zoom;
+                                _mapController.move(
+                                  _mapController.camera.center,
+                                  currentZoom - 1,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: const SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Icon(
+                                  Icons.remove,
+                                  color: Color(0xFF00C6A7),
+                                  size: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          )
+        : Column(
             children: [
-              Expanded(
-                child: _buildToggleButton(
-                  'Карта',
-                  _isMapMode,
-                  () => _setMode(true),
+              // Панель поиска
+              Container(
+                padding: _searchPadding,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Поиск станций...',
+                    hintStyle: TextStyle(color: Colors.grey[600]),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                    suffixIcon: Icon(
+                      Icons.arrow_drop_down,
+                      color: Colors.grey[600],
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  style: const TextStyle(fontSize: 16),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _buildToggleButton(
-                  'Список',
-                  !_isMapMode,
-                  () => _setMode(false),
+              const SizedBox(height: 10),
+              // Кнопки переключения карта/список
+              Padding(
+                padding: _togglePadding,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: _buildToggleButton(
+                        'Карта',
+                        _isMapMode,
+                        () => _setMode(true),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildToggleButton(
+                        'Список',
+                        !_isMapMode,
+                        () => _setMode(false),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _isMapMode
-              ? Consumer<StationProvider>(
-                  builder: (context, provider, child) {
-                    return _buildMapView(context, provider);
-                  },
-                )
-              : Consumer<StationProvider>(
+              Expanded(
+                child: Consumer<StationProvider>(
                   builder: (context, provider, child) {
                     return RefreshIndicator(
                       onRefresh: () async {
@@ -168,12 +426,9 @@ class _MapScreenState extends State<MapScreen> {
                     );
                   },
                 ),
-        ),
-        const SizedBox(height: 10),
-        _buildBottomButtons(),
-        const SizedBox(height: 10),
-      ],
-    );
+              ),
+            ],
+          );
   }
 
   //Кнопки переключения карта/список
@@ -182,7 +437,7 @@ class _MapScreenState extends State<MapScreen> {
     bool isActive,
     VoidCallback onPressed,
   ) {
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
         gradient: isActive
             ? const LinearGradient(
@@ -191,19 +446,28 @@ class _MapScreenState extends State<MapScreen> {
                 end: Alignment.centerRight,
               )
             : LinearGradient(
-                colors: [Colors.grey[200]!, Colors.grey[300]!],
+                colors: [
+                  Colors.white.withOpacity(0.95),
+                  Colors.white.withOpacity(0.90),
+                ],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
-        borderRadius: BorderRadius.circular(8), // настроить под ваш дизайн
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent, // прозрачный фон
-          shadowColor: Colors.transparent, // убрать тень
-          foregroundColor: isActive
-              ? Colors.white
-              : Colors.black87, // цвет текста
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: isActive ? Colors.white : Colors.black87,
+          elevation: 0,
         ),
         onPressed: onPressed,
         child: Text(label),
@@ -216,23 +480,48 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Выбран: ${isMap ? 'Карта' : 'Список'}');
   }
 
-  Set<Marker> _createMarkers(List<Station> stations) {
+  List<Marker> _createMarkers(List<Station> stations) {
     return stations
         .where((station) => station.lat != null && station.lng != null)
         .map((station) {
           return Marker(
-            markerId: MarkerId(station.id),
-            position: LatLng(station.lat!, station.lng!),
-            infoWindow: InfoWindow(
-              title: station.name,
-              snippet: station.address,
+            point: LatLng(station.lat!, station.lng!),
+            width: 40,
+            height: 40,
+            child: GestureDetector(
+              onTap: () {
+                // Показать информацию о станции
+                _showStationInfo(context, station);
+              },
+              child: const Icon(Icons.location_on, color: Colors.red, size: 40),
             ),
-            onTap: () {
-              // Можно добавить навигацию к модалу станции
-            },
           );
         })
-        .toSet();
+        .toList();
+  }
+
+  void _showStationInfo(BuildContext context, Station station) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(station.name),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(station.address),
+            const SizedBox(height: 8),
+            Text('Доступно: ${station.available}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
   }
 
   // Построение карты
@@ -240,28 +529,59 @@ class _MapScreenState extends State<MapScreen> {
     final stations = provider.stations;
     final markers = _createMarkers(stations);
 
-    // Начальная позиция: первая станция с координатами или Москва
-    LatLng initialPosition;
-    if (stations.isNotEmpty &&
-        stations.first.lat != null &&
-        stations.first.lng != null) {
-      initialPosition = LatLng(stations.first.lat!, stations.first.lng!);
-    } else {
-      initialPosition = const LatLng(55.7558, 37.6173); // Москва
+    // Добавляем маркер текущего местоположения если доступен
+    if (_currentLocation != null) {
+      markers.add(
+        Marker(
+          point: _currentLocation!,
+          width: 50,
+          height: 50,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.3),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.blue, width: 3),
+            ),
+            child: const Icon(Icons.my_location, color: Colors.blue, size: 24),
+          ),
+        ),
+      );
     }
 
-    return GoogleMap(
-      mapType: MapType.normal,
-      initialCameraPosition: CameraPosition(
-        target: initialPosition,
-        zoom: 14.0,
+    // Начальная позиция: Махачкала (Дагестан)
+    LatLng initialPosition;
+    if (_currentLocation != null) {
+      // Если есть текущее местоположение, используем его
+      initialPosition = _currentLocation!;
+    } else if (stations.isNotEmpty &&
+        stations.first.lat != null &&
+        stations.first.lng != null) {
+      // Если есть станции, используем первую
+      initialPosition = LatLng(stations.first.lat!, stations.first.lng!);
+    } else {
+      // По умолчанию - Махачкала
+      initialPosition = const LatLng(42.9849, 47.5047);
+    }
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: initialPosition,
+        initialZoom: 13.0,
+        minZoom: 5.0,
+        maxZoom: 18.0,
       ),
-      markers: markers,
-      onMapCreated: (GoogleMapController controller) {
-        if (!_controller.isCompleted) {
-          _controller.complete(controller);
-        }
-      },
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.it_charge',
+          maxZoom: 19,
+        ),
+        MarkerLayer(
+          markers: markers,
+          rotate: false, // Маркеры не вращаются вместе с картой
+        ),
+      ],
     );
   }
 
@@ -295,57 +615,100 @@ class _MapScreenState extends State<MapScreen> {
 
   //Нижние кнопки рядом/доступно/км
   Widget _buildBottomButtons() {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildButton(Icons.location_on, '5', 'Рядом', Colors.blue[400]!),
-          _buildButton(
-            Icons.fiber_manual_record,
-            '12',
-            'Доступно',
-            Colors.green[400]!,
+          Expanded(
+            child: _buildButton(
+              Icons.location_on,
+              '5',
+              'Рядом',
+              const Color(0xFF00C6A7),
+            ),
           ),
-          _buildButton(Icons.arrow_forward, '0.5', 'KM', Colors.orange[400]!),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildButton(
+              Icons.fiber_manual_record,
+              '12',
+              'Доступно',
+              const Color(0xFF70E000),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildButton(
+              Icons.route,
+              '0.5',
+              'KM',
+              const Color(0xFF00C6A7),
+            ),
+          ),
         ],
       ),
     );
   }
 
   //Построение нижних кнопок
-  Widget _buildButton(
-    IconData icon,
-    String number,
-    String label,
-    Color bgColor,
-  ) {
-    return TextButton(
-      onPressed: () {},
-      style: TextButton.styleFrom(
-        backgroundColor: bgColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.black54),
-              const SizedBox(width: 4),
-              Text(
-                number,
-                style: const TextStyle(color: Colors.black87, fontSize: 16),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.black87, fontSize: 14),
+  Widget _buildButton(IconData icon, String number, String label, Color color) {
+    return Container(
+      height: 64,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.95), color.withOpacity(0.85)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {},
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 4),
+                    Text(
+                      number,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

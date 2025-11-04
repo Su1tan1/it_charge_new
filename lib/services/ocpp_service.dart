@@ -8,8 +8,11 @@ import 'package:it_charge/config.dart';
 import 'package:it_charge/models/transaction_model.dart';
 
 class OcppService {
-  static String get _baseUrl => Config.baseUrl;
+  static String get _stationsUrl => Config.stationsUrl;
   static String get _apiKey => Config.apiKey;
+
+  @Deprecated('Use specific service URLs')
+  static String get _baseUrl => Config.baseUrl;
 
   // HTTP-запрос с ретраями
   static Future<http.Response> _httpRequest({
@@ -30,7 +33,7 @@ class OcppService {
       } catch (e) {
         if (attempts >= Config.maxRetries) {
           final errMsg = e.toString().length > 40
-              ? e.toString().substring(0, 40) + '...'
+              ? '${e.toString().substring(0, 40)}...'
               : e.toString();
           debugPrint('❌ $method $endpoint: $errMsg');
           rethrow;
@@ -66,67 +69,101 @@ class OcppService {
 
   // Получение станций только через HTTP (для pull-to-refresh)
   static Future<List<Station>> fetchStationsHTTPOnly() async {
-    final endpoints = [
-      '/api/user/stations',
-      '/user/stations',
-      '/api/v1/stations',
-      '/api/stations/list',
-      '/api/stations',
-    ];
+    // Новый API endpoint через Nginx
+    final url = _stationsUrl;
     final headers = <String, String>{'Content-Type': 'application/json'};
-    if (_apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $_apiKey';
 
-    List<String> errors = [];
-    for (final path in endpoints) {
-      try {
-        final res = await http
-            .get(Uri.parse('$_baseUrl$path'), headers: headers)
-            .timeout(const Duration(seconds: 10));
+    try {
+      final res = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 10));
 
-        if (res.statusCode != 200) {
-          errors.add('[$path] ${res.statusCode}');
-          continue;
-        }
-        final decoded = jsonDecode(res.body);
-        return _parseListResponse<Station>(decoded, Station.fromJson);
-      } catch (e) {
-        errors.add('[$path] $e');
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}');
       }
+      final decoded = jsonDecode(res.body);
+      return _parseListResponse<Station>(decoded, Station.fromJson);
+    } catch (e) {
+      debugPrint('❌ fetchStationsHTTPOnly: $e');
+      rethrow;
     }
-    throw Exception('Все HTTP-эндпоинты провалились: ${errors.join('; ')}');
   }
 
   // Получение станций
   static Future<List<Station>> fetchStations() async {
-    // Попытка WebSocket
+    // Попытка WebSocket ТОЛЬКО если уже подключен
     try {
       final ws = CSMSClient.instance;
-      if (!ws.connected) await ws.connect();
-      final resp = await ws.request('getStations');
-      debugPrint('✅ WS getStations');
-      return _parseListResponse<Station>(resp, Station.fromJson);
+      if (ws.connected) {
+        final resp = await ws
+            .request('getStations')
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS getStations');
+        return _parseListResponse<Station>(resp, Station.fromJson);
+      }
     } catch (e) {
       debugPrint('⚠️ WS getStations → HTTP');
     }
 
-    // Фоллбек на HTTP
+    // Используем HTTP по умолчанию
     return fetchStationsHTTPOnly();
+  }
+
+  /// Получение деталей конкретной станции и её live статуса
+  static Future<Station> getStationById(String stationId) async {
+    // Попытка WebSocket ТОЛЬКО если уже подключен
+    try {
+      final ws = CSMSClient.instance;
+      if (ws.connected) {
+        final resp = await ws
+            .request('getStation', {'stationId': stationId})
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS getStation');
+        return Station.fromJson(resp);
+      }
+    } catch (e) {
+      debugPrint('⚠️ WS getStation → HTTP');
+    }
+
+    // HTTP запрос к новому API
+    final url = '$_stationsUrl/$stationId';
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    try {
+      final res = await http
+          .get(Uri.parse(url), headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode != 200) {
+        throw Exception('HTTP ${res.statusCode}');
+      }
+
+      final decoded = jsonDecode(res.body);
+      debugPrint('✅ HTTP getStation: $stationId');
+      return Station.fromJson(decoded as Map<String, dynamic>);
+    } catch (e) {
+      debugPrint('❌ getStation $stationId: $e');
+      rethrow;
+    }
   }
 
   // Получение транзакций для станции
   static Future<List<Transaction>> getTransactionsForStation(
     String chargePointId,
   ) async {
-    // Попытка WebSocket
+    // Попытка WebSocket ТОЛЬКО если уже подключен
     try {
       final ws = CSMSClient.instance;
-      if (!ws.connected) await ws.connect();
-      final res = await ws.request('getRecentTransactions', {
-        'limit': 50,
-        'stationId': chargePointId,
-      });
-      debugPrint('✅ WS getRecentTransactions');
-      return _parseListResponse<Transaction>(res, Transaction.fromJson);
+      if (ws.connected) {
+        final res = await ws
+            .request('getRecentTransactions', {
+              'limit': 50,
+              'stationId': chargePointId,
+            })
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS getRecentTransactions');
+        return _parseListResponse<Transaction>(res, Transaction.fromJson);
+      }
     } catch (e) {
       debugPrint('⚠️ WS getRecentTransactions → HTTP');
     }
@@ -167,16 +204,19 @@ class OcppService {
     String stationId,
     int connectorId,
   ) async {
-    // Попытка WebSocket
+    // Попытка WebSocket ТОЛЬКО если уже подключен
     try {
       final ws = CSMSClient.instance;
-      if (!ws.connected) await ws.connect();
-      final res = await ws.request('getConnectorStatus', {
-        'stationId': stationId,
-        'connectorId': connectorId,
-      });
-      debugPrint('✅ WS getConnectorStatus');
-      return res;
+      if (ws.connected) {
+        final res = await ws
+            .request('getConnectorStatus', {
+              'stationId': stationId,
+              'connectorId': connectorId,
+            })
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS getConnectorStatus');
+        return res;
+      }
     } catch (e) {
       debugPrint('⚠️ WS getConnectorStatus → HTTP');
     }
@@ -207,22 +247,65 @@ class OcppService {
     String? authToken,
     int? startValue,
   }) async {
-    // Попытка WebSocket
+    // Попытка WebSocket ТОЛЬКО если уже подключен
     try {
       final ws = CSMSClient.instance;
-      if (!ws.connected) await ws.connect();
-      final res = await ws.request('startCharging', {
-        'stationId': stationId,
-        'connectorId': connectorId,
-        'idTag': idTag,
-      });
-      debugPrint('✅ WS startCharging');
-      return res;
+      if (ws.connected) {
+        final res = await ws
+            .request('startCharging', {
+              'stationId': stationId,
+              'connectorId': connectorId,
+              'idTag': idTag,
+            })
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS startCharging');
+        return res;
+      }
     } catch (e) {
       debugPrint('⚠️ WS startCharging → HTTP');
     }
 
-    // Фоллбек на HTTP
+    // New API: POST /stations/{stationId}/remote-start
+    final url = '$_stationsUrl/$stationId/remote-start';
+    final headers = <String, String>{'Content-Type': 'application/json'};
+
+    final bodyMap = <String, dynamic>{
+      'connectorId': connectorId,
+      'idTag': idTag,
+    };
+    final body = jsonEncode(bodyMap);
+
+    try {
+      final res = await http
+          .post(Uri.parse(url), headers: headers, body: body)
+          .timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        debugPrint('✅ HTTP startCharging');
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('⚠️ New API failed, trying legacy');
+    }
+
+    // Legacy fallback
+    return _startChargingLegacy(
+      stationId,
+      connectorId,
+      idTag,
+      authToken,
+      startValue,
+    );
+  }
+
+  // Legacy remote start
+  static Future<Map<String, dynamic>> _startChargingLegacy(
+    String stationId,
+    int connectorId,
+    String idTag,
+    String? authToken,
+    int? startValue,
+  ) async {
     final endpoint = '/api/admin/remote-start-session';
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $_apiKey';
@@ -246,7 +329,7 @@ class OcppService {
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception('HTTP ${res.statusCode}');
     }
-    debugPrint('✅ startCharging через HTTP');
+    debugPrint('✅ HTTP startCharging (legacy)');
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
@@ -256,25 +339,49 @@ class OcppService {
     String? chargePointId,
     int? connectorId,
   }) async {
-    final stationId =
-        chargePointId; // chargePointId is actually stationId from the backend
+    final stationId = chargePointId;
 
-    // Попытка WebSocket
+    // Попытка WebSocket ТОЛЬКО если уже подключен
     try {
       final ws = CSMSClient.instance;
-      if (!ws.connected) await ws.connect();
-      final res = await ws.request('stopCharging', {
-        'transactionId': transactionId,
-        'stationId': stationId,
-        'connectorId': connectorId,
-      });
-      debugPrint('✅ WS stopCharging');
-      return res;
+      if (ws.connected) {
+        final res = await ws
+            .request('stopCharging', {
+              'transactionId': transactionId,
+              'stationId': stationId,
+              'connectorId': connectorId,
+            })
+            .timeout(const Duration(seconds: 3));
+        debugPrint('✅ WS stopCharging');
+        return res;
+      }
     } catch (e) {
       debugPrint('⚠️ WS stopCharging → HTTP');
     }
 
-    // Фоллбек на HTTP с несколькими эндпоинтами
+    // New API: POST /stations/{stationId}/remote-stop
+    if (stationId != null) {
+      final url = '$_stationsUrl/$stationId/remote-stop';
+      final headers = <String, String>{'Content-Type': 'application/json'};
+
+      final bodyMap = <String, dynamic>{'transactionId': transactionId};
+      final body = jsonEncode(bodyMap);
+
+      try {
+        final res = await http
+            .post(Uri.parse(url), headers: headers, body: body)
+            .timeout(const Duration(seconds: 10));
+
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          debugPrint('✅ HTTP stopCharging');
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint('⚠️ New API failed, trying legacy');
+      }
+    }
+
+    // Legacy fallback
     final candidates = ['/api/admin/remote-stop-session'];
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (_apiKey.isNotEmpty) headers['Authorization'] = 'Bearer $_apiKey';
@@ -294,7 +401,7 @@ class OcppService {
               .timeout(const Duration(seconds: 10)),
         );
         if (res.statusCode != 200 && res.statusCode != 201) continue;
-        debugPrint('✅ HTTP stopCharging');
+        debugPrint('✅ HTTP stopCharging (legacy)');
         return jsonDecode(res.body) as Map<String, dynamic>;
       } catch (e) {
         continue;

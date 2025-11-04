@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:it_charge/main_navigator.dart';
 import 'package:it_charge/providers/station_provider.dart';
 import 'package:provider/provider.dart';
-import ' screens/auth_screens/email_auth_screen.dart';
-import ' screens/auth_screens/login_choice_screen.dart';
-import ' screens/auth_screens/otp_screen.dart';
-import ' screens/auth_screens/phone_auth_screen.dart'; // Re-add PhoneAuthScreen import
+import 'screens/auth_screens/email_auth_screen.dart';
+import 'screens/auth_screens/login_choice_screen.dart';
+import 'screens/auth_screens/otp_screen.dart';
+import 'screens/auth_screens/phone_auth_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:it_charge/services/csms_client.dart'; // Import CSMSClient
+import 'package:it_charge/services/csms_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,31 +72,17 @@ class _WebSocketInitializerState extends State<WebSocketInitializer>
   }
 
   Future<void> _initWebSocket() async {
+    // WebSocket подключение отключено по умолчанию
+    // Раскомментируйте если WebSocket сервер доступен
+    /*
     try {
       await CSMSClient.instance.connect();
       debugPrint('WebSocket connected successfully in main.dart');
     } catch (e) {
       debugPrint('Failed to connect WebSocket in main.dart: $e');
     }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    switch (state) {
-      case AppLifecycleState.resumed:
-        if (!CSMSClient.instance.connected) {
-          _initWebSocket();
-        }
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-        CSMSClient.instance.close();
-        break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-        break;
-    }
+    */
+    debugPrint('ℹ️ WebSocket автоподключение отключено');
   }
 
   @override

@@ -120,7 +120,7 @@ class StationProvider extends ChangeNotifier {
           debugPrint('⏱️ WS timeout → HTTP');
         } catch (e) {
           final errMsg = e.toString().length > 50
-              ? e.toString().substring(0, 50) + '...'
+              ? '${e.toString().substring(0, 50)}...'
               : e.toString();
           debugPrint('⚠️ WS: $errMsg → HTTP');
         }

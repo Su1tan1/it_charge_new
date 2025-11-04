@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import ' screens/history_screen.dart';
-import ' screens/map_screen.dart';
-import ' screens/profile_screen.dart'; // Для signOut в Profile
+import 'screens/history_screen.dart';
+import 'screens/map_screen.dart';
+import 'screens/profile_screen.dart'; // Для signOut в Profile
 
 class MainNavigator extends StatefulWidget {
   const MainNavigator({super.key});
