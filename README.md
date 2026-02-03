@@ -1,16 +1,29 @@
-# it_charge
+iTcharge ⚡
 
-A new Flutter project.
+Учебное мобильное приложение на Flutter для учёта и управления зарядкой устройств / батарей.  
 
-## Getting Started
+Что реализовано
+- Учёт устройств и их зарядки  
+- Отображение уровня заряда  
+- Навигация между экранами  
+- Возможность добавлять новые устройства  
+ 
 
-This project is a starting point for a Flutter application.
+Как запустить
+1. Клонируйте репозиторий:
+git clone https://github.com/Su1tan1/iTcharge.git
+2. Перейдите в папку проекта:
+cd iTcharge
+3. Установите зависимости:
+flutter pub get
+4. Запустите приложение:
+flutter run
 
-A few resources to get you started if this is your first Flutter project:
+О проекте
+Это учебный проект, где я изучал основы управления состоянием приложения и работу с динамическими списками.  
+Проект помогает понять, как создавать интерактивные приложения с данными, которые можно добавлять и отслеживать.  
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Что можно добавить позже
+- Сохранение данных в базу (например, SQLite)  
+- Напоминания о зарядке устройств  
+- Улучшение интерфейса и анимаций
